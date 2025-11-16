@@ -1,4 +1,5 @@
 CC := clang
+SYSTEM_CC := clang
 LD := lld
 ASM := nasm
 
@@ -21,7 +22,7 @@ test_shim: elf_loader/test_shim.c elf_loader/elfloader.c
 SYSTEM_PROGRAMS := system/HigherOrLower.c system/StartKernel.c
 BINARIES := $(patsubst system/%.c,%,$(SYSTEM_PROGRAMS))
 $(BINARIES): %: system/%.c
-	$(CC) $(CFLAGS_GENERIC) -Wl,--no-dynamic-linker -Wl,-z,norelro -Wl,-static -o root/$@.elf $<
+	$(SYSTEM_CC) $(CFLAGS_GENERIC) -Wl,--no-dynamic-linker -Wl,-z,norelro -Wl,-static -o root/$@.elf $<
 
 bootx64.efi: uefiboot.o sysv_elf_compat.o $(BINARIES)
 	$(LD) $(LDFLAGS) obj/uefiboot.o obj/sysv_elf_compat.o -out:root/EFI/boot/$@

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <__stdarg_va_list.h>
 #include <stddef.h>
 #include <stdint.h>
 
