@@ -30,7 +30,7 @@ bootx64.efi: uefiboot.o sysv_elf_compat.o $(BINARIES)
 .PHONY: qemu
 
 qemu: bootx64.efi
-	qemu-system-x86_64 -machine q35 -enable-kvm -cpu host -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -m 80M
+	qemu-system-x86_64 -machine q35 --enable-kvm -cpu host -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -m 1G
 
 
 all: bootx64.efi

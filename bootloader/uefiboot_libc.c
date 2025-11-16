@@ -16,6 +16,8 @@ int _fltused = 0;
 
 CHAR16 *int32_to_string(INT32 value);
 CHAR16 *int64_to_string(INT64 value);
+CHAR16 *uint64_to_string(UINT64 value);
+CHAR16 *ptr_to_string(void *Pointer);
 void   *memcpy(void *dest, const void *src, size_t n) {
     unsigned char       *d = dest;
     const unsigned char *s = src;
@@ -83,6 +85,9 @@ void Panic(CHAR16 *Msg) {
 void PrintNumber(INT64 num) {
     Print(int64_to_string(num));
 }
+void PrintPointer(void *ptr) {
+    Print(ptr_to_string(ptr));
+}
 
 // See system/elf_libc.c, as these definitions need to match
 struct MemoryRegion {
@@ -105,17 +110,18 @@ struct MemoryLayout {
 
 static EFI_MEMORY_DESCRIPTOR *MemoryMap    = NULL;
 static struct MemoryLayout    MemoryLayout = {0};
+static UINTN                  MapKey       = 0;
 struct MemoryLayout          *UpdateMemoryMap(bool OutputStatistics) {
     EFI_STATUS                 Status;
-    static UINTN               Size, MapKey, DescriptorSize;
-    static UINT32              DescriptorVersion;
-    static struct MemoryLayout MemoryLayout = {0};
-    Status                                  = ST->BootServices->GetMemoryMap(&Size,
+    static UINTN               Size = 0, DescriptorSize = 0;
+    static UINT32              DescriptorVersion = 0;
+    static struct MemoryLayout MemoryLayout      = {0};
+    Status                                       = ST->BootServices->GetMemoryMap(&Size,
                                             MemoryMap,
                                             &MapKey,
                                             &DescriptorSize,
                                             &DescriptorVersion);
-    UINTN UsableMB                          = 0;
+    UINTN UsableMB                               = 0;
     if (Status == EFI_BUFFER_TOO_SMALL) {
         Size += DescriptorSize * 2;
         Status = ST->BootServices->AllocatePool(EfiLoaderData, Size, (void **) &MemoryMap);
@@ -174,6 +180,33 @@ struct MemoryLayout          *UpdateMemoryMap(bool OutputStatistics) {
     }
 
     return &MemoryLayout;
+}
+
+struct FrameBufferInfo {
+    UINT32 *Base;
+    UINTN   Size;
+
+    UINT32 Width, Height;
+    // UINT32 PixelsPerScanline;
+};
+
+struct FrameBufferInfo *GetFramebufferInfo(void) {
+    static struct FrameBufferInfo Info = {0};
+    Info.Base                          = (void *) GOP->Mode->FrameBufferBase;
+    Info.Size                          = GOP->Mode->FrameBufferSize;
+    Info.Width                         = GOP->Mode->Info->HorizontalResolution;
+    Info.Height                        = GOP->Mode->Info->VerticalResolution;
+    // Info.PixelsPerScanline             = GOP->Mode->Info->PixelsPerScanLine;
+
+    if (GOP->Mode->Info->PixelFormat != PixelBlueGreenRedReserved8BitPerColor) {
+        Panic(L"Unsupported pixel format");
+    }
+
+    if (Info.Width != GOP->Mode->Info->PixelsPerScanLine) {
+        Panic(L"Framebuffer width and scanline length mismatch");
+    }
+
+    return &Info;
 }
 
 UINTN StrLen(CHAR16 *str) {
@@ -298,6 +331,28 @@ CHAR16 *int64_to_string(INT64 value) {
 
     // Null-terminate
     buffer[i] = 0;
+
+    return buffer;
+}
+
+CHAR16 *ptr_to_string(void *Pointer) {
+    static CHAR16 buffers[8][20]; // "0x" + 16 hex digits + null
+    static int    buffer_index = 0;
+
+    CHAR16 *buffer = buffers[buffer_index];
+    buffer_index   = (buffer_index + 1) % 8;
+
+    UINT64 value = (UINT64) Pointer;
+
+    buffer[0] = L'0';
+    buffer[1] = L'x';
+
+    for (int i = 0; i < 16; i++) {
+        UINT64 nibble = (value >> ((15 - i) * 4)) & 0xF;
+        buffer[2 + i] = (nibble < 10) ? (CHAR16) (L'0' + nibble) : (CHAR16) (L'A' + (nibble - 10));
+    }
+
+    buffer[18] = 0;
 
     return buffer;
 }
@@ -618,6 +673,16 @@ UINT64 *SystemDispatcher(INT64 syscall_number, void *userdata) {
     case 4:
         // Provide latest memory map
         return (UINT64 *) UpdateMemoryMap(false);
+    case 5:
+        // Exit boot services
+        UpdateMemoryMap(false);
+        if (EFI_ERROR(ST->BootServices->ExitBootServices(ImageHandle, MapKey))) {
+            Panic(L"Failed to exit UEFI mode");
+        }
+        return 0;
+    case 6:
+        // Get framebuffer info
+        return (UINT64 *) GetFramebufferInfo();
     }
     return 0;
 }

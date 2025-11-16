@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -23,31 +24,138 @@ void *memcpy(void *dst, const void *src, usize n) {
     return dst;
 }
 
-void *memset(void *dst, usize c, usize n) {
+// To make the compiler happy
+void *memset(void *dst, int c, usize n) {
     uchar *d = dst;
     while (n--)
         *d++ = (uchar) c;
     return dst;
 }
 
+void *MemSet(void *dst, usize c, usize n) {
+    uchar *d = dst;
+    while (n--)
+        *d++ = (uchar) c;
+    return dst;
+}
+
+void *MemMove(void *dst, const void *src, usize n) {
+    unsigned char       *d = dst;
+    const unsigned char *s = src;
+
+    if (d < s) {
+        for (size_t i = 0; i < n; i++)
+            d[i] = s[i];
+    } else if (d > s) {
+        for (size_t i = n; i > 0; i--)
+            d[i - 1] = s[i - 1];
+    }
+
+    return dst;
+}
+
+size_t StrLen(const char *s) {
+    size_t n = 0;
+    while (s[n] != '\0')
+        n++;
+    return n;
+}
+
 typedef int64_t (*SysInvoke)(i64 call, usize userdata);
 static SysInvoke SYSINVOKE;
 
-void PrintLine(char *Text) {
+void UEFIPrintLine(char *Text) {
     SYSINVOKE(0, (usize) Text);
 }
 
-void Print(char *Text) {
+void UEFIPrint(char *Text) {
     SYSINVOKE(1, (usize) Text);
 }
 
-void PrintNumber(uint64_t Number) {
+void UEFIPrintNumber(uint64_t Number) {
     SYSINVOKE(2, (usize) Number);
 }
 
-i64 ReadLine(char *LineBuffer) {
+i64 UEFIReadLine(char *LineBuffer) {
     return SYSINVOKE(3, (usize) LineBuffer);
 }
+
+// See bootloader/uefiboot_libc.c, as these definitions need to match
+struct MemoryRegion {
+    u64 Start;
+    u64 NumPages;
+};
+
+#define MAX_REGIONS 32
+struct MemoryLayout {
+    usize NumConventionalRegions;
+    usize NumMemoryMappedIORegions;
+    usize NumPortMappedIORegions;
+    usize NumACPIRegions;
+
+    struct MemoryRegion ConventionalRegions[MAX_REGIONS];
+    struct MemoryRegion MemoryMappedIORegions[MAX_REGIONS];
+    struct MemoryRegion PortMappedIORegions[MAX_REGIONS];
+    struct MemoryRegion ACPIRegions[MAX_REGIONS];
+};
+
+struct MemoryLayout *GetMemoryLayout(void) {
+    return (struct MemoryLayout *) (usize) SYSINVOKE(4, 0);
+}
+
+#define STB_SPRINTF_IMPLEMENTATION
+#include "./vendor/stb_sprintf.h"
+#include <stdarg.h>
+
+struct FrameBufferPixel {
+    u8 Blue;
+    u8 Green;
+    u8 Red;
+    u8 Reserved;
+};
+struct FrameBufferInfo {
+    struct FrameBufferPixel *Base;
+    usize                    Size;
+
+    u32 Width, Height;
+    // u32 PixelsPerScanline;
+};
+
+static struct FrameBufferInfo *gFrameBuffer = NULL;
+
+#include "kernel/Terminal.c"
+
+struct FrameBufferInfo *GetFrameBufferInfo(void) {
+    return (struct FrameBufferInfo *) (usize) SYSINVOKE(6, 0);
+}
+
+void ExitUEFIMode(void) {
+    SYSINVOKE(5, 0);
+}
+
+void UEFIPrintf(const char *Format, ...) __attribute__((format(printf, 1, 2)));
+void UEFIPrintf(const char *Format, ...) {
+    char    PrintBuffer[512] = {0};
+    va_list args;
+    va_start(args, Format);
+
+    stbsp_vsnprintf(PrintBuffer, sizeof(PrintBuffer), Format, args);
+    va_end(args);
+    UEFIPrint(PrintBuffer);
+}
+
+void UEFIPrintLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));
+void UEFIPrintLinef(const char *Format, ...) {
+    char    PrintBuffer[512] = {0};
+    va_list args;
+    va_start(args, Format);
+
+    stbsp_vsnprintf(PrintBuffer, sizeof(PrintBuffer), Format, args);
+    va_end(args);
+    UEFIPrintLine(PrintBuffer);
+}
+
+// Kernel section
 
 i64 StringToInt64(char *String) {
     if (!String)
@@ -90,55 +198,6 @@ u64 RandomInt64(void) {
 
     __asm__ volatile("rdtsc" : "=A"(value));
     return value;
-}
-
-// See bootloader/uefiboot_libc.c, as these definitions need to match
-struct MemoryRegion {
-    u64 Start;
-    u64 NumPages;
-};
-
-#define MAX_REGIONS 32
-struct MemoryLayout {
-    usize NumConventionalRegions;
-    usize NumMemoryMappedIORegions;
-    usize NumPortMappedIORegions;
-    usize NumACPIRegions;
-
-    struct MemoryRegion ConventionalRegions[MAX_REGIONS];
-    struct MemoryRegion MemoryMappedIORegions[MAX_REGIONS];
-    struct MemoryRegion PortMappedIORegions[MAX_REGIONS];
-    struct MemoryRegion ACPIRegions[MAX_REGIONS];
-};
-
-struct MemoryLayout *GetMemoryLayout(void) {
-    return (struct MemoryLayout *) (usize) SYSINVOKE(4, 0);
-}
-
-#define STB_SPRINTF_IMPLEMENTATION
-#include "./vendor/stb_sprintf.h"
-#include <stdarg.h>
-
-void Printf(const char *Format, ...) __attribute__((format(printf, 1, 2)));
-void Printf(const char *Format, ...) {
-    char    PrintBuffer[512] = {0};
-    va_list args;
-    va_start(args, Format);
-
-    stbsp_vsnprintf(PrintBuffer, sizeof(PrintBuffer), Format, args);
-    va_end(args);
-    Print(PrintBuffer);
-}
-
-void PrintLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));
-void PrintLinef(const char *Format, ...) {
-    char    PrintBuffer[512] = {0};
-    va_list args;
-    va_start(args, Format);
-
-    stbsp_vsnprintf(PrintBuffer, sizeof(PrintBuffer), Format, args);
-    va_end(args);
-    PrintLine(PrintBuffer);
 }
 
 i32 main();
