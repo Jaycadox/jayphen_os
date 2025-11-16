@@ -1,11 +1,11 @@
 # Jayphen OS
 
-A hobby operation system project for experimentation.
+A hobby operating system project for experimentation.
 
 ## Build
 To build, you need:
 * clang
-* ldd
+* lld
 * nasm
 * qemu
 
