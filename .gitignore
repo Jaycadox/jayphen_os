@@ -1,0 +1,5 @@
+edk2/
+obj/
+root/
+.cache/
+compile_commands.json
