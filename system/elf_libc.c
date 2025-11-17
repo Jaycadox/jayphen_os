@@ -1,5 +1,6 @@
 #pragma once
 
+#include <__stdarg_va_list.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -164,8 +165,7 @@ i64 StringToInt64(char *String) {
     i64 result = 0;
     i32 sign   = 1;
 
-    while (*String == ' ' || *String == '\t' || *String == '\n' || *String == '\r' ||
-           *String == '\v' || *String == '\f') {
+    while (*String == ' ' || *String == '\t' || *String == '\n' || *String == '\r' || *String == '\v' || *String == '\f') {
         String++;
     }
 
@@ -198,6 +198,19 @@ u64 RandomInt64(void) {
 
     __asm__ volatile("rdtsc" : "=A"(value));
     return value;
+}
+
+void Panic(const char *Format, ...) __attribute__((format(printf, 1, 2)));
+void Panic(const char *Format, ...) {
+    ClearTerminal(0x55, 0x0, 0x0);
+    PrintLinef("!!! KERNEL PANIC !!!");
+
+    va_list args;
+    va_start(args, Format);
+    PrintLinefv(Format, args);
+    va_end(args);
+    for (;;)
+        ;
 }
 
 i32 main();

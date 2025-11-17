@@ -99,10 +99,11 @@ void DebugNoop(char *msg) {
 // If memory_base is NULL, then the size of memory to allocate is returned in the elfloader_Result,
 // and the elf will not be loaded yet. Call this function again with memory_base pointing to a
 // buffer of at least memory_size bytes to actually load the elf.
-struct elfloader_Result
-elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_size) {
-    struct elfloader_Seek seek  = {.data = data, .sz = sz, .idx = 0};
-    const char           *error = NULL;
+struct elfloader_Result elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_size) {
+    struct elfloader_Seek seek            = {.data = data, .sz = sz, .idx = 0};
+    const char           *error           = NULL;
+    uint64_t              entrypoint      = 0;
+    uint64_t              new_memory_size = 0;
 
     // Parse header
 
@@ -147,7 +148,7 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
     }
     Debug("sysV abi");
 
-    uint8_t _abiversion = elfloader_readbyte(&seek);
+    /*uint8_t abiversion =*/elfloader_readbyte(&seek);
 
     // Pad
     elfloader_skipbytes(&seek, 7);
@@ -173,22 +174,22 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
     }
     Debug("version_2 1");
 
-    uint64_t entrypoint = elfloader_readlong(&seek);
+    entrypoint = elfloader_readlong(&seek);
     Debug("entrypoint");
     //    printf("entrypoint: %llx\n", entrypoint);
 
     uint64_t program_header_offset = elfloader_readlong(&seek);
     Debug("program header offset");
 
-    uint64_t section_header_offset = elfloader_readlong(&seek);
+    /*uint64_t section_header_offset =*/elfloader_readlong(&seek);
 
-    uint64_t flags                     = elfloader_readint(&seek);
-    uint64_t header_size               = elfloader_readshort(&seek);
-    uint64_t program_header_entry_size = elfloader_readshort(&seek);
-    uint64_t program_header_entries    = elfloader_readshort(&seek);
-    uint64_t section_header_entry_size = elfloader_readshort(&seek);
-    uint64_t section_header_entries    = elfloader_readshort(&seek);
-    uint64_t section_name_index        = elfloader_readshort(&seek);
+    /*uint64_t flags                     = */ elfloader_readint(&seek);
+    /*uint64_t header_size               = */ elfloader_readshort(&seek);
+    /*uint64_t program_header_entry_size = */ elfloader_readshort(&seek);
+    uint64_t program_header_entries = elfloader_readshort(&seek);
+    /*uint64_t section_header_entry_size = */ elfloader_readshort(&seek);
+    /*uint64_t section_header_entries    = */ elfloader_readshort(&seek);
+    /*uint64_t section_name_index        = */ elfloader_readshort(&seek);
 
     Debug("section header offset");
 
@@ -207,7 +208,8 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
 #define MAX_PROGRAM_HEADERS 32
     struct Program_Header program_headers[MAX_PROGRAM_HEADERS] = {0};
     if (program_header_entries > MAX_PROGRAM_HEADERS) {
-        error = "Too many program headers";
+        new_memory_size = 0;
+        error           = "Too many program headers";
         goto done;
     }
 
@@ -221,11 +223,11 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
             continue;
         }
         //    printf("type: %lld\n", type);
-        uint64_t flags = elfloader_readint(&seek);
+        /*uint64_t flags =*/elfloader_readint(&seek);
         //    printf("flags: %lld\n", flags);
         program_headers[i].offset    = elfloader_readlong(&seek);
         program_headers[i].v_address = elfloader_readlong(&seek);
-        uint64_t p_address           = elfloader_readlong(&seek);
+        /*uint64_t p_address           =*/elfloader_readlong(&seek);
         program_headers[i].file_size = elfloader_readlong(&seek);
         program_headers[i].mem_size  = elfloader_readlong(&seek);
         program_headers[i].align     = elfloader_readlong(&seek);
@@ -259,7 +261,6 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
     //    }
 
     // Calculate memory size
-    uint64_t new_memory_size = 0;
     for (size_t i = 0; i < num_loader_headers; ++i) {
         uint64_t end = program_headers[i].v_address + program_headers[i].mem_size;
         if (end > new_memory_size) {
@@ -280,13 +281,9 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
 
     for (size_t i = 0; i < num_loader_headers; ++i) {
         uint64_t dest = (uint64_t) memory_base + program_headers[i].v_address;
-        elfloader_memcpy((void *) dest,
-                         data + program_headers[i].offset,
-                         program_headers[i].file_size);
+        elfloader_memcpy((void *) dest, data + program_headers[i].offset, program_headers[i].file_size);
         if (program_headers[i].file_size < program_headers[i].mem_size) {
-            elfloader_memset((void *) (dest + program_headers[i].file_size),
-                             0,
-                             program_headers[i].mem_size - program_headers[i].file_size);
+            elfloader_memset((void *) (dest + program_headers[i].file_size), 0, program_headers[i].mem_size - program_headers[i].file_size);
         }
 
 #ifdef __linux__
@@ -297,9 +294,7 @@ elfloader_read(uint8_t *data, size_t sz, uint8_t *memory_base, uint64_t memory_s
     entrypoint += (uint64_t) memory_base;
 
 done: {
-    struct elfloader_Result ret = (struct elfloader_Result) {.error       = error,
-                                                             .memory_size = new_memory_size,
-                                                             .entrypoint  = (void *) entrypoint};
+    struct elfloader_Result ret = (struct elfloader_Result) {.error = error, .memory_size = new_memory_size, .entrypoint = (void *) entrypoint};
     return ret;
 }
 }

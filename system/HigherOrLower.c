@@ -6,8 +6,8 @@ i32 main() {
 
     UEFIPrintLine("Guess a number between 1 and 100...");
     for (;;) {
-        char  Buffer[256] = {0};
-        usize Length      = UEFIReadLine(Buffer);
+        char Buffer[256] = {0};
+        UEFIReadLine(Buffer);
 
         u64 Number = StringToInt64(Buffer);
         if (Number == CorrectNumber) {

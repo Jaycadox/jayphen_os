@@ -74,7 +74,7 @@ void Panic(CHAR16 *Msg) {
     PrintLine(L"\r\n\r\n\r\nPress any key to continue...");
 
     UINTN         Index;
-    EFI_STATUS    status = ST->BootServices->WaitForEvent(1, &ST->ConIn->WaitForKey, &Index);
+    ST->BootServices->WaitForEvent(1, &ST->ConIn->WaitForKey, &Index);
     EFI_INPUT_KEY key;
     ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
     PrintLine(L"Restarting system...");
@@ -116,6 +116,7 @@ struct MemoryLayout          *UpdateMemoryMap(bool OutputStatistics) {
     static UINTN               Size = 0, DescriptorSize = 0;
     static UINT32              DescriptorVersion = 0;
     static struct MemoryLayout MemoryLayout      = {0};
+    memset(&MemoryLayout, 0, sizeof(MemoryLayout));
     Status                                       = ST->BootServices->GetMemoryMap(&Size,
                                             MemoryMap,
                                             &MapKey,
@@ -367,7 +368,6 @@ EFI_GRAPHICS_OUTPUT_BLT_PIXEL hue_to_rgb(float hue) {
     int   i = (int) h; // sector 0–5
     float f = h - i;   // fractional part
 
-    float p = 0.0f;
     float q = 1.0f - f;
     float t = f;
 
@@ -426,10 +426,6 @@ void RainbowStripe(int height) {
         hue += hue_change;
         x += stripe_width;
     }
-
-    EFI_GRAPHICS_OUTPUT_BLT_PIXEL black_pixel = {.Red = 0, .Blue = 0, .Green = 0};
-
-    EFI_GRAPHICS_OUTPUT_BLT_PIXEL red_pixel = {.Red = 255, .Blue = 0, .Green = 0};
 }
 
 void ListRoot(void) {
@@ -443,7 +439,6 @@ void ListRoot(void) {
     if (EFI_ERROR(Status))
         Panic(L"Failed to allocate buffer");
 
-    UINTN count = 0;
     Status      = Root->SetPosition(Root, 0);
     if (EFI_ERROR(Status))
         Panic(L"Failed to set position");
@@ -479,7 +474,6 @@ EFI_FILE_INFO *GetFile(CHAR16 *FileName) {
     if (EFI_ERROR(Status))
         Panic(L"Failed to allocate buffer");
 
-    UINTN count = 0;
     Status      = Root->SetPosition(Root, 0);
     if (EFI_ERROR(Status))
         Panic(L"Failed to set position");

@@ -11,12 +11,13 @@ AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty
 AllowShortCaseLabelsOnASingleLine: false
 
-ColumnLimit: 100
+ColumnLimit: 150
 SpaceAfterCStyleCast: true
 SpaceBeforeParens: ControlStatements
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
 SpacesInAngles: false
+SpacesInContainerLiterals: true
 
 PointerAlignment: Right
 AlignConsecutiveDeclarations: true
