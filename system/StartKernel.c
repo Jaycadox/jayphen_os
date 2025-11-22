@@ -4,6 +4,8 @@
 
 #include "./kernel/Allocator.c"
 #include "./kernel/GlobalDescriptorTable.c"
+#include "./kernel/ProgrammableIntervalTimer.c"
+#include "./kernel/PCI.c"
 
 int main(void) {
     struct MemoryLayout    *Layout      = GetMemoryLayout();
@@ -28,11 +30,13 @@ int main(void) {
     InitializeAllocator(Layout);
     void *KernelStackStart = AllocatePages(KERNEL_STACK_PAGES);
     InitializeGlobalDescriptorTable(KernelStackStart + (KERNEL_STACK_PAGES * PAGE_SIZE));
+    EnableProgrammableIntervalTimer(1000);
+    ScanPCIBus();
 
-    for (int i = 0; i < 200; ++i) {
-        // PrintLinef("Hello, world! %d", i);
-    }
     for (;;)
-        ;
+    {
+        // PrintLinef("test");
+    }
+
     return 0;
 }

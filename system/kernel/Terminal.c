@@ -1,9 +1,14 @@
 #pragma once
 
-#define TERMINAL_FONT_RAW 8
-#define TERMINAL_FONT_SCALE 2
-#define TERMINAL_FONT_PX (TERMINAL_FONT_RAW * TERMINAL_FONT_SCALE)
+#define TERMINAL_FONT_SCALE 1
+#define TERMINAL_FONT_RAW_X 8
+#define TERMINAL_FONT_PX_X (TERMINAL_FONT_RAW_X * TERMINAL_FONT_SCALE)
+
+#define TERMINAL_FONT_RAW_Y 16
+#define TERMINAL_FONT_PX_Y (TERMINAL_FONT_RAW_Y * TERMINAL_FONT_SCALE)
+
 #include "../elf_libc.c"
+#include "font8x16.h"
 #include "font8x8.h"
 
 struct TerminalColour {
@@ -42,8 +47,8 @@ void TerminalPutChar(char Char) {
         gTerminal.TextColourInit = true;
     }
 
-    u64 MaximumCharactersPerRow = (gFrameBuffer->Width / TERMINAL_FONT_PX);
-    u64 MaximumRows             = (gFrameBuffer->Height / TERMINAL_FONT_PX);
+    u64 MaximumCharactersPerRow = (gFrameBuffer->Width / TERMINAL_FONT_PX_X);
+    u64 MaximumRows             = (gFrameBuffer->Height / TERMINAL_FONT_PX_Y);
     u64 Capacity                = MaximumCharactersPerRow * MaximumRows;
     u64 CharacterYIndex         = gTerminal.Position / MaximumCharactersPerRow;
     u64 CharacterXIndex         = gTerminal.Position % MaximumCharactersPerRow;
@@ -61,16 +66,22 @@ void TerminalPutChar(char Char) {
     }
 
     if (NextPosition >= Capacity) {
-        usize NumPixels = ((MaximumRows - 1) * TERMINAL_FONT_PX) * gFrameBuffer->Width;
+        usize NumPixels = ((MaximumRows - 1) * TERMINAL_FONT_PX_Y) * gFrameBuffer->Width;
         usize NumBytes  = NumPixels * sizeof(struct FrameBufferPixel);
 
-        struct FrameBufferPixel *Source = gFrameBuffer->Base + (TERMINAL_FONT_PX * gFrameBuffer->Width);
+        struct FrameBufferPixel *Source = gFrameBuffer->Base + (TERMINAL_FONT_PX_Y * gFrameBuffer->Width);
         struct FrameBufferPixel *Dest   = gFrameBuffer->Base;
 
-        MemMove(Dest, Source, NumBytes);
+        u32* DestPtr = (u32*)Dest;
+        u32* SrcPtr = (u32*)Source;
+        usize PixelCount = NumBytes / 4;
 
-        usize                    NumPixelsToBlank  = TERMINAL_FONT_PX * gFrameBuffer->Width;
-        struct FrameBufferPixel *BlankPixelsSource = gFrameBuffer->Base + ((MaximumRows - 1) * TERMINAL_FONT_PX * gFrameBuffer->Width);
+        for (usize i = 0; i < PixelCount; ++i) {
+            DestPtr[i] = SrcPtr[i];
+        }
+
+        usize                    NumPixelsToBlank  = TERMINAL_FONT_PX_Y * gFrameBuffer->Width;
+        struct FrameBufferPixel *BlankPixelsSource = gFrameBuffer->Base + ((MaximumRows - 1) * TERMINAL_FONT_PX_Y * gFrameBuffer->Width);
         MemSet(BlankPixelsSource, 0x0, NumPixelsToBlank * sizeof(struct FrameBufferPixel));
         CharacterYIndex    = MaximumRows - 1;
         CharacterXIndex    = 0;
@@ -78,22 +89,23 @@ void TerminalPutChar(char Char) {
         NextPosition       = (Char == '\n') ? gTerminal.Position : gTerminal.Position + 1;
     }
 
-    u64 CharacterYPos = CharacterYIndex * TERMINAL_FONT_PX;
-    u64 CharacterXPos = CharacterXIndex * TERMINAL_FONT_PX;
+    u64 CharacterYPos = CharacterYIndex * TERMINAL_FONT_PX_Y;
+    u64 CharacterXPos = CharacterXIndex * TERMINAL_FONT_PX_X;
+    if (Char != '\n' && Char != '\r' && Char != '\t') {
+        char *PixelData = font8x16[(usize) Char];
+        for (u64 YOffset = 0; YOffset < TERMINAL_FONT_PX_Y; ++YOffset) {
+            char RowData = PixelData[YOffset / TERMINAL_FONT_SCALE];
+            for (u64 XOffset = 0; XOffset < TERMINAL_FONT_PX_X; ++XOffset) {
+                u64  Y       = CharacterYPos + YOffset;
+                u64  X       = CharacterXPos + XOffset;
+                bool Enabled = RowData & (1 << ((TERMINAL_FONT_PX_X - XOffset - 1) / TERMINAL_FONT_SCALE));
 
-    char *PixelData = font8x8_basic[(usize) Char];
-    for (u64 YOffset = 0; YOffset < TERMINAL_FONT_PX; ++YOffset) {
-        char RowData = PixelData[YOffset / TERMINAL_FONT_SCALE];
-        for (u64 XOffset = 0; XOffset < TERMINAL_FONT_PX; ++XOffset) {
-            u64  Y       = CharacterYPos + YOffset;
-            u64  X       = CharacterXPos + XOffset;
-            bool Enabled = RowData & (1 << (XOffset / TERMINAL_FONT_SCALE));
-
-            if (Enabled) {
-                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Red      = gTerminal.TextColour.Red;
-                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Green    = gTerminal.TextColour.Green;
-                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Blue     = gTerminal.TextColour.Blue;
-                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Reserved = 0xFF;
+                if (Enabled) {
+                    gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Red      = gTerminal.TextColour.Red;
+                    gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Green    = gTerminal.TextColour.Green;
+                    gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Blue     = gTerminal.TextColour.Blue;
+                    gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Reserved = 0xFF;
+                }
             }
         }
     }
@@ -120,28 +132,34 @@ void PrintLine(char *String) {
 
 void Printf(const char *Format, ...) __attribute__((format(printf, 1, 2)));
 void Printf(const char *Format, ...) {
+    DisableInterrupts();
     va_list args;
     va_start(args, Format);
 
     stbsp_vsnprintf(gScratch, sizeof(gScratch), Format, args);
     va_end(args);
     Print(gScratch);
+    DisableInterrupts();
 }
 
 void PrintLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));
 void PrintLinef(const char *Format, ...) {
+    DisableInterrupts();
     va_list args;
     va_start(args, Format);
 
     stbsp_vsnprintf(gScratch, sizeof(gScratch), Format, args);
     va_end(args);
     PrintLine(gScratch);
+    EnableInterrupts();
 }
 
 void PrintLinefv(const char *Format, va_list va);
 void PrintLinefv(const char *Format, va_list va) {
+    DisableInterrupts();
     stbsp_vsnprintf(gScratch, sizeof(gScratch), Format, va);
     PrintLine(gScratch);
+    EnableInterrupts();
 }
 
 #ifdef KERNEL_DEBUG

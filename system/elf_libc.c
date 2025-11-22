@@ -17,6 +17,8 @@
 #define i32 int32_t
 #define i64 int64_t
 
+volatile usize TickCount = 0;
+
 void *memcpy(void *dst, const void *src, usize n) {
     uchar       *d = dst;
     const uchar *s = src;
@@ -40,19 +42,10 @@ void *MemSet(void *dst, usize c, usize n) {
     return dst;
 }
 
-void *MemMove(void *dst, const void *src, usize n) {
-    unsigned char       *d = dst;
-    const unsigned char *s = src;
-
-    if (d < s) {
-        for (size_t i = 0; i < n; i++)
-            d[i] = s[i];
-    } else if (d > s) {
-        for (size_t i = n; i > 0; i--)
-            d[i - 1] = s[i - 1];
+void MemMove(u8 *Dest, const u8 *Source, usize Count) {
+    for (usize i = 0; i < Count; ++i) {
+        Dest[i] = Source[i];
     }
-
-    return dst;
 }
 
 size_t StrLen(const char *s) {
@@ -102,6 +95,14 @@ struct MemoryLayout {
 
 struct MemoryLayout *GetMemoryLayout(void) {
     return (struct MemoryLayout *) (usize) SYSINVOKE(4, 0);
+}
+
+void DisableInterrupts(void) {
+    __asm__ volatile("cli" ::: "memory");
+}
+
+void EnableInterrupts(void) {
+    __asm__ volatile("sti" ::: "memory");
 }
 
 #define STB_SPRINTF_IMPLEMENTATION
@@ -158,6 +159,22 @@ void UEFIPrintLinef(const char *Format, ...) {
 
 // Kernel section
 
+void SleepMS(usize MS) {
+    // compute the end tick in C to keep it simple
+    size_t End = TickCount + MS;
+
+    __asm__ volatile("1:\n\t"
+                     "mov %[Tick], %%rax\n\t"
+                     "cmp %[End], %%rax\n\t"
+                     "jae 2f\n\t"
+                     "hlt\n\t"
+                     "jmp 1b\n\t"
+                     "2:"
+                     :
+                     : [Tick] "m"(TickCount), [End] "r"(End)
+                     : "rax", "memory");
+}
+
 i64 StringToInt64(char *String) {
     if (!String)
         return 0;
@@ -211,6 +228,36 @@ void Panic(const char *Format, ...) {
     va_end(args);
     for (;;)
         ;
+}
+
+u8 InByte(u16 Port) {
+    u8 Value;
+    __asm__ volatile("inb %1, %0" : "=a"(Value) : "Nd"(Port));
+    return Value;
+}
+
+void OutByte(u16 Port, u8 Value) {
+    __asm__ volatile("outb %0, %1" : : "a"(Value), "Nd"(Port));
+}
+
+u16 InWord(u16 Port) {
+    u16 Value;
+    __asm__ volatile("inw %1, %0" : "=a"(Value) : "Nd"(Port));
+    return Value;
+}
+
+void OutWord(u16 Port, u16 Value) {
+    __asm__ volatile("outw %0, %1" : : "a"(Value), "Nd"(Port));
+}
+
+u32 InDWord(u16 Port) {
+    u32 Value;
+    __asm__ volatile("inl %1, %0" : "=a"(Value) : "Nd"(Port));
+    return Value;
+}
+
+void OutDWord(u16 Port, u32 Value) {
+    __asm__ volatile("outl %0, %1" : : "a"(Value), "Nd"(Port));
 }
 
 i32 main();

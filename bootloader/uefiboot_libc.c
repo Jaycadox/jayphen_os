@@ -58,22 +58,13 @@ void Panic(CHAR16 *Msg) {
     ST->ConIn->Reset(ST->ConIn, FALSE);
 
     EFI_GRAPHICS_OUTPUT_BLT_PIXEL red = hue_to_rgb(0.0);
-    GOP->Blt(GOP,
-             &red,
-             EfiBltVideoFill,
-             0,
-             0,
-             0,
-             0,
-             GOP->Mode->Info->HorizontalResolution,
-             GOP->Mode->Info->VerticalResolution,
-             0);
+    GOP->Blt(GOP, &red, EfiBltVideoFill, 0, 0, 0, 0, GOP->Mode->Info->HorizontalResolution, GOP->Mode->Info->VerticalResolution, 0);
     ST->ConOut->SetAttribute(ST->ConOut, EFI_BACKGROUND_LIGHTGRAY | EFI_RED);
     PrintLine(L" !!! UEFI PANIC !!! ");
     PrintLine(Msg);
     PrintLine(L"\r\n\r\n\r\nPress any key to continue...");
 
-    UINTN         Index;
+    UINTN Index;
     ST->BootServices->WaitForEvent(1, &ST->ConIn->WaitForKey, &Index);
     EFI_INPUT_KEY key;
     ST->ConIn->ReadKeyStroke(ST->ConIn, &key);
@@ -117,60 +108,45 @@ struct MemoryLayout          *UpdateMemoryMap(bool OutputStatistics) {
     static UINT32              DescriptorVersion = 0;
     static struct MemoryLayout MemoryLayout      = {0};
     memset(&MemoryLayout, 0, sizeof(MemoryLayout));
-    Status                                       = ST->BootServices->GetMemoryMap(&Size,
-                                            MemoryMap,
-                                            &MapKey,
-                                            &DescriptorSize,
-                                            &DescriptorVersion);
-    UINTN UsableMB                               = 0;
+    Status         = ST->BootServices->GetMemoryMap(&Size, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
+    UINTN UsableMB = 0;
     if (Status == EFI_BUFFER_TOO_SMALL) {
         Size += DescriptorSize * 2;
         Status = ST->BootServices->AllocatePool(EfiLoaderData, Size, (void **) &MemoryMap);
         if (EFI_ERROR(Status))
             Panic(L"Failed to allocate memory map");
-        Status = ST->BootServices->GetMemoryMap(&Size,
-                                                MemoryMap,
-                                                &MapKey,
-                                                &DescriptorSize,
-                                                &DescriptorVersion);
+        Status = ST->BootServices->GetMemoryMap(&Size, MemoryMap, &MapKey, &DescriptorSize, &DescriptorVersion);
         if (EFI_ERROR(Status))
             Panic(L"Failed to load memory map");
 
         UINTN Entries = Size / DescriptorSize;
 
         for (UINTN i = 0; i < Entries; ++i) {
-            EFI_MEMORY_DESCRIPTOR *Descriptor =
-                (EFI_MEMORY_DESCRIPTOR *) ((UINT8 *) MemoryMap + (i * DescriptorSize));
+            EFI_MEMORY_DESCRIPTOR *Descriptor = (EFI_MEMORY_DESCRIPTOR *) ((UINT8 *) MemoryMap + (i * DescriptorSize));
             switch (Descriptor->Type) {
             case EfiConventionalMemory:
                 UsableMB += ((Descriptor->NumberOfPages * (4096)) / 1048576);
                 MemoryLayout.ConventionalRegions[MemoryLayout.NumConventionalRegions++] =
-                    (struct MemoryRegion) {.Start    = Descriptor->PhysicalStart,
-                                                    .NumPages = Descriptor->NumberOfPages};
+                    (struct MemoryRegion) {.Start = Descriptor->PhysicalStart, .NumPages = Descriptor->NumberOfPages};
                 break;
             case EfiMemoryMappedIO:
                 MemoryLayout.MemoryMappedIORegions[MemoryLayout.NumMemoryMappedIORegions++] =
-                    (struct MemoryRegion) {.Start    = Descriptor->PhysicalStart,
-                                                    .NumPages = Descriptor->NumberOfPages};
+                    (struct MemoryRegion) {.Start = Descriptor->PhysicalStart, .NumPages = Descriptor->NumberOfPages};
                 break;
             case EfiMemoryMappedIOPortSpace:
                 MemoryLayout.PortMappedIORegions[MemoryLayout.NumPortMappedIORegions++] =
-                    (struct MemoryRegion) {.Start    = Descriptor->PhysicalStart,
-                                                    .NumPages = Descriptor->NumberOfPages};
+                    (struct MemoryRegion) {.Start = Descriptor->PhysicalStart, .NumPages = Descriptor->NumberOfPages};
                 break;
             case EfiACPIReclaimMemory:
                 MemoryLayout.ACPIRegions[MemoryLayout.NumACPIRegions++] =
-                    (struct MemoryRegion) {.Start    = Descriptor->PhysicalStart,
-                                                    .NumPages = Descriptor->NumberOfPages};
+                    (struct MemoryRegion) {.Start = Descriptor->PhysicalStart, .NumPages = Descriptor->NumberOfPages};
                 break;
             };
         }
     }
 
-    if (MemoryLayout.NumMemoryMappedIORegions > MAX_REGIONS ||
-        MemoryLayout.NumPortMappedIORegions > MAX_REGIONS ||
-        MemoryLayout.NumACPIRegions > MAX_REGIONS ||
-        MemoryLayout.NumConventionalRegions > MAX_REGIONS) {
+    if (MemoryLayout.NumMemoryMappedIORegions > MAX_REGIONS || MemoryLayout.NumPortMappedIORegions > MAX_REGIONS ||
+        MemoryLayout.NumACPIRegions > MAX_REGIONS || MemoryLayout.NumConventionalRegions > MAX_REGIONS) {
         Panic(L"Too many memory regions");
     }
 
@@ -435,11 +411,11 @@ void ListRoot(void) {
 
     EFI_FILE_INFO *File;
     UINTN          BufSize = 1024; // Larger buffer
-    EFI_STATUS     Status = ST->BootServices->AllocatePool(EfiLoaderData, BufSize, (VOID **) &File);
+    EFI_STATUS     Status  = ST->BootServices->AllocatePool(EfiLoaderData, BufSize, (VOID **) &File);
     if (EFI_ERROR(Status))
         Panic(L"Failed to allocate buffer");
 
-    Status      = Root->SetPosition(Root, 0);
+    Status = Root->SetPosition(Root, 0);
     if (EFI_ERROR(Status))
         Panic(L"Failed to set position");
 
@@ -470,11 +446,11 @@ EFI_FILE_INFO *GetFile(CHAR16 *FileName) {
 
     EFI_FILE_INFO *File;
     UINTN          BufSize = 1024; // Larger buffer
-    EFI_STATUS     Status = ST->BootServices->AllocatePool(EfiLoaderData, BufSize, (VOID **) &File);
+    EFI_STATUS     Status  = ST->BootServices->AllocatePool(EfiLoaderData, BufSize, (VOID **) &File);
     if (EFI_ERROR(Status))
         Panic(L"Failed to allocate buffer");
 
-    Status      = Root->SetPosition(Root, 0);
+    Status = Root->SetPosition(Root, 0);
     if (EFI_ERROR(Status))
         Panic(L"Failed to set position");
 
@@ -499,8 +475,7 @@ EFI_FILE_INFO *GetFile(CHAR16 *FileName) {
 char *ReadFile(EFI_FILE_INFO *FileInfo) {
     char *Data;
 
-    EFI_STATUS Status = ST->BootServices->AllocatePool(EfiLoaderData,
-                                                       FileInfo->FileSize + 1,
+    EFI_STATUS Status = ST->BootServices->AllocatePool(EfiLoaderData, FileInfo->FileSize + 1,
                                                        (VOID **) &Data); // +1 for null terminator
     if (EFI_ERROR(Status))
         Panic(L"Failed to load bytes for reading file");
@@ -539,10 +514,7 @@ void FreeFile(char *Data) {
 
 char *AllocatePageBoundary(UINTN size) {
     char      *Address;
-    EFI_STATUS Status = ST->BootServices->AllocatePages(AllocateAnyPages,
-                                                        EfiLoaderCode,
-                                                        EFI_SIZE_TO_PAGES(size),
-                                                        (EFI_PHYSICAL_ADDRESS *) &Address);
+    EFI_STATUS Status = ST->BootServices->AllocatePages(AllocateAnyPages, EfiLoaderCode, EFI_SIZE_TO_PAGES(size), (EFI_PHYSICAL_ADDRESS *) &Address);
     if (EFI_ERROR(Status)) {
         return NULL;
     } else {
@@ -721,8 +693,7 @@ int LoadElf(CHAR16 *FileName) {
     if (!FileData)
         return -1;
 
-    struct elfloader_Result InitialResult =
-        elfloader_read((unsigned char *) FileData, FileSize, NULL, 0);
+    struct elfloader_Result InitialResult = elfloader_read((unsigned char *) FileData, FileSize, NULL, 0);
     if (InitialResult.error) {
         Print(L"Invalid ELF file: ");
         Print(FileName);
@@ -731,10 +702,7 @@ int LoadElf(CHAR16 *FileName) {
     }
 
     char                   *MemoryBase = AllocatePageBoundary(InitialResult.memory_size);
-    struct elfloader_Result Result     = elfloader_read((unsigned char *) FileData,
-                                                    FileSize,
-                                                    (void *) MemoryBase,
-                                                    InitialResult.memory_size);
+    struct elfloader_Result Result     = elfloader_read((unsigned char *) FileData, FileSize, (void *) MemoryBase, InitialResult.memory_size);
     if (Result.error) {
         Panic(L"Failed to load elf");
     }
@@ -744,8 +712,7 @@ int LoadElf(CHAR16 *FileName) {
 
     int res = CallSysVEntrypoint(entrypoint, SystemInvoke);
     // Free memory
-    ST->BootServices->FreePages((EFI_PHYSICAL_ADDRESS) MemoryBase,
-                                EFI_SIZE_TO_PAGES(InitialResult.memory_size));
+    ST->BootServices->FreePages((EFI_PHYSICAL_ADDRESS) MemoryBase, EFI_SIZE_TO_PAGES(InitialResult.memory_size));
     FreeFile(FileData);
 
     return res;

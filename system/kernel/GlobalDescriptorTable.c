@@ -37,7 +37,8 @@ struct GlobalDescriptorTableEntry MakeGlobalDescriptorTableEntry(u32 Base, u32 L
     return Entry;
 }
 
-void PushGlobalDescriptorTableEntry(u32 Base, u32 Limit, u8 Access, u8 Flags) {
+// Returns offset into GDT
+u64 PushGlobalDescriptorTableEntry(u32 Base, u32 Limit, u8 Access, u8 Flags) {
     usize Index = gGDTCurrentEntryIndex++;
     if (Index >= MAX_GDT_ENTRIES) {
         Panic("GDT entry overflow");
@@ -46,6 +47,7 @@ void PushGlobalDescriptorTableEntry(u32 Base, u32 Limit, u8 Access, u8 Flags) {
     gGDTEntries[Index]                      = Entry;
 
     DebugLinef("+GDT Entry [%zu/%d]: Base = %X, Limit = %X, Access = %X, Flags = %X", Index + 1, MAX_GDT_ENTRIES, Base, Limit, Access, Flags);
+    return Index * sizeof(usize);
 }
 
 void LoadGlobalDescriptorTable(void) {
@@ -122,16 +124,18 @@ void PushTaskStateSegmentEntries(struct TaskStateSegmentEntry *Entry) {
     PushGlobalDescriptorTableEntry(Base >> 32, 0, 0, 0);
 }
 
+#include "InterruptDescriptorTable.c"
+
 void InitializeGlobalDescriptorTable(void *KernelStackStart) {
     // NULL descriptor
     PushGlobalDescriptorTableEntry(0, 0, 0, 0);
 
     // Kernel code segment
-    PushGlobalDescriptorTableEntry(0,       // Base, ignored in 64 bit mode
-                                   0xFFFFF, // Limit, ignored in 64 bit mode
-                                   GDT_PRESENT | GDT_RING0 | GDT_DESCRIPTOR_CODE_OR_DATA | GDT_EXECUTABLE | GDT_CODE_PRIVILEGE_EQUAL |
-                                       GDT_CODE_ALLOW_READS,                        // Access
-                                   GDT_FLAG_PAGES | GDT_FLAG_64BIT_PROTECTED_MODE); // Flags
+    u64 KernelCodeOffset = PushGlobalDescriptorTableEntry(0,       // Base, ignored in 64 bit mode
+                                                          0xFFFFF, // Limit, ignored in 64 bit mode
+                                                          GDT_PRESENT | GDT_RING0 | GDT_DESCRIPTOR_CODE_OR_DATA | GDT_EXECUTABLE |
+                                                              GDT_CODE_PRIVILEGE_EQUAL | GDT_CODE_ALLOW_READS, // Access
+                                                          GDT_FLAG_PAGES | GDT_FLAG_64BIT_PROTECTED_MODE);     // Flags
 
     // Kernel data segment
     PushGlobalDescriptorTableEntry(0,       // Base, ignored in 64 bit mode
@@ -144,6 +148,6 @@ void InitializeGlobalDescriptorTable(void *KernelStackStart) {
 
     LoadGlobalDescriptorTable();
     LoadTaskStateSegmentEntry();
-
     DebugLinef("TSS kernel stack start: %p (256 pages)", KernelStackStart);
+    InitializeInterruptDescriptorTable(KernelCodeOffset);
 }

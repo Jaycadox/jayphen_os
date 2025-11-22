@@ -14,4 +14,8 @@ if [ ! -d root ]; then
     echo "StartKernel.elf" > root/AUTORUN
 fi
 
+if [ ! -d kernel_rootdir ]; then
+    mkdir kernel_rootdir
+fi
+
 make qemu
