@@ -1,5 +1,5 @@
 #pragma once
-#include "../elf_libc.c"
+#include "elf_libc.c"
 
 #define PCI_ADDRESS_PORT 0x0CF8
 #define PCI_DATA_PORT 0x0CFC
@@ -95,7 +95,7 @@ bool ReadPCIConfig(struct PCIConfig *Config, u8 Bus, u8 Device, u8 Function) {
 #define PCI_MAX_DEVICES 32
 #define PCI_MAX_FUNCTIONS 8
 
-#include "./Drivers/USB.c"
+#include "./Drivers/USB/OHCI.c"
 
 void ScanPCIDevice(struct PCIConfig *Config) {
     DebugLinef("+PCI Device (%X:%X): Class = 0x%X, Subclass = 0x%X, Base = 0x%X @%d:%d:%d (IRQ%d)",

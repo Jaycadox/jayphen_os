@@ -1,9 +1,10 @@
+
 // OHCI USB host controller driver
 #pragma once
-#include "../../elf_libc.c"
-#include "../Allocator.c"
-#include "../Interrupts.c"
-#include "../PCI.c"
+#include "elf_libc.c"
+#include "kernel/Allocator.c"
+#include "kernel/Interrupts.c"
+#include "kernel/PCI.c"
 
 #define USB_INTERFACE_UCHI 0x0
 #define USB_INTERFACE_OCHI 0x10
@@ -264,7 +265,7 @@ struct OHCIEndpointDescriptor {
     volatile u32                     TailPointer;
     volatile union OHCIEDHeadPointer HeadPointer;
     volatile u32                     NextED;
-};
+} __attribute__((packed, aligned(16)));
 _Static_assert(sizeof(struct OHCIEndpointDescriptor) == 16, "OHCI ED Size Mismatch");
 
 union OHCIGTDControl {
@@ -285,7 +286,7 @@ struct OHCIGeneralTransferDescriptor {
     volatile u32                  CurrentBufferPointer;
     volatile u32                  NextTD;
     volatile u32                  BufferEnd;
-};
+} __attribute__((packed, aligned(16)));
 
 _Static_assert(sizeof(struct OHCIGeneralTransferDescriptor) == 16, "OHCI GTD Size Mismatch");
 
@@ -320,6 +321,146 @@ struct OHCIRequestStorage {
     struct OHCIRequestPacket             Request;
 };
 
+struct OHCIConfigDescriptor {
+    u8  Length;
+    u8  Type;
+    u16 TotalLength;
+    u8  NumInterfaces;
+    u8  ConfigurationValue;
+    u8  iConfiguration;
+    u8  Attributes;
+    u8  MaxPower;
+} __attribute__((packed));
+
+struct OHCIInterfaceDescriptor {
+    u8 Length;
+    u8 Type;
+    u8 InterfaceNumber;
+    u8 AlternateSetting;
+    u8 NumEndpoints;
+    u8 InterfaceClass;
+    u8 InterfaceSubClass;
+    u8 InterfaceProtocol;
+    u8 iInterface;
+} __attribute__((packed));
+
+struct OHCIHIDDescriptor {
+    u8  Length;
+    u8  Type;
+    u16 HID;
+    u8  CountryCode;
+    u8  NumDescriptors;
+    u8  ReportDescriptorType;
+    u16 ReportDescriptorLength;
+};
+
+struct OHCIUSBEndpointDescriptor {
+    u8  Length;
+    u8  Type;
+    u8  EndpointAddress;
+    u8  Attributes;
+    u16 MaxPacketSize;
+    u8  Interval;
+} __attribute__((packed));
+
+enum USBRequestType {
+    USB_DIR_HOST_TO_DEVICE = 0x00,
+    USB_DIR_DEVICE_TO_HOST = 0x80,
+
+    USB_TYPE_STANDARD = 0x00,
+    USB_TYPE_CLASS    = 0x20,
+    USB_TYPE_VENDOR   = 0x40,
+
+    USB_RECIP_DEVICE    = 0x00,
+    USB_RECIP_INTERFACE = 0x01,
+    USB_RECIP_ENDPOINT  = 0x02,
+    USB_RECIP_OTHER     = 0x03,
+};
+
+enum USBRequest {
+    USB_REQ_GET_STATUS        = 0x00,
+    USB_REQ_CLEAR_FEATURE     = 0x01,
+    USB_REQ_SET_FEATURE       = 0x03,
+    USB_REQ_SET_ADDRESS       = 0x05,
+    USB_REQ_GET_DESCRIPTOR    = 0x06,
+    USB_REQ_SET_DESCRIPTOR    = 0x07,
+    USB_REQ_GET_CONFIGURATION = 0x08,
+    USB_REQ_SET_CONFIGURATION = 0x09,
+    USB_REQ_GET_INTERFACE     = 0x0A,
+    USB_REQ_SET_INTERFACE     = 0x0B,
+    USB_REQ_SYNCH_FRAME       = 0x0C,
+};
+
+enum USBDescriptorType {
+    USB_DESC_DEVICE           = 0x0100,
+    USB_DESC_CONFIGURATION    = 0x0200,
+    USB_DESC_STRING           = 0x0300,
+    USB_DESC_INTERFACE        = 0x0400,
+    USB_DESC_ENDPOINT         = 0x0500,
+    USB_DESC_DEVICE_QUALIFIER = 0x0600,
+    USB_DESC_OTHER_SPEED_CONF = 0x0700,
+    USB_DESC_INTERFACE_POWER  = 0x0800,
+    USB_DESC_HUB              = 0x2900,
+};
+
+enum USBInterfaceClass {
+    USB_INTERFACE_UNK          = 0x0,
+    USB_INTERFACE_HID          = 0x3,
+    USB_INTERFACE_MASS_STORAGE = 0x8,
+    USB_INTERFACE_HUB          = 0x9,
+};
+
+struct OHCIPort {
+    bool FullSpeed;
+};
+
+struct OHCIDevice {
+    char                            Buffer[256];
+    struct OHCIDeviceDescriptor     Descriptor;
+    struct OHCIPort                *Port;
+    u32                             FunctionAddress;
+    bool                            Active;
+    bool                            HasConfigAndInterface;
+    struct OHCIConfigDescriptor    *Config;
+    struct OHCIInterfaceDescriptor *Interface;
+    char                            ProductString[64];
+    char                            ManufacturerString[64];
+    enum USBInterfaceClass          InterfaceClass;
+    union {
+        struct {
+            u8                                    EndpointNumber;
+            u8                                    Interval;
+            u8                                    Direction;
+            struct OHCIEndpointDescriptor        *EndpointDescriptor;
+            struct OHCIGeneralTransferDescriptor *TransferDescriptor;
+            struct OHCIGeneralTransferDescriptor *DummyTransferDescriptor;
+            char                                  Data[64];
+        } HID;
+    };
+};
+
+struct OHCIUSBHubDescriptor {
+    u8  bLength;
+    u8  bDescriptorType;
+    u8  bNbrPorts;
+    u16 wHubCharacteristics;
+    u8  bPwrOn2PwrGood;
+    u8  bHubContrCurrent;
+} __attribute__((packed));
+
+struct OHCIUSBStringDescriptor {
+    u8 Length;
+    u8 Type;
+    u8 String[128];
+};
+
+struct OHCIUSBPortStatus {
+    u16 PortStatus;
+    u16 PortChange;
+} __attribute__((packed));
+
+#define USB_MAX_DEVICES 128
+
 static struct OHCIControllerRegisters *gOHCIRegisters = NULL;
 static struct {
     struct OHCIHCCA               *HCCABase;
@@ -329,42 +470,21 @@ static struct {
     struct OHCIEndpointDescriptor *BulkHead;
 
     struct OHCIRequestStorage *RequestStorage;
+    struct OHCIPort            Ports[USB_MAX_DEVICES];
+    struct OHCIDevice          Devices[USB_MAX_DEVICES];
+    usize                      Period16MSIndex;
+    usize                      Period8MSIndex;
+    usize                      Period4MSIndex;
+    usize                      Period2MSIndex;
+    usize                      Period1MSIndex;
+
 } gOHCI = {0};
 
-struct OHCIConfigDescriptor {
-    u8  Length;
-    u8  Type;
-    u16 TotalLength; // Total size including all interfaces/endpoints
-    u8  NumInterfaces;
-    u8  ConfigurationValue;
-    u8  iConfiguration; // String index
-    u8  Attributes;     // Bit 7=reserved(1), Bit 6=self-powered, Bit 5=remote wakeup
-    u8  MaxPower;       // In 2mA units
-} __attribute__((packed));
-
-struct OHCIInterfaceDescriptor {
-    u8 Length;
-    u8 Type;
-    u8 InterfaceNumber;
-    u8 AlternateSetting;
-    u8 NumEndpoints;
-    u8 InterfaceClass;    // 0x03 for HID
-    u8 InterfaceSubClass; // 0x01 for boot devices
-    u8 InterfaceProtocol; // 0x01 keyboard, 0x02 mouse
-    u8 iInterface;        // String index
-} __attribute__((packed));
-
-struct OHCIUSBEndpointDescriptor {
-    u8  Length;
-    u8  Type;
-    u8  EndpointAddress; // Bit 7=direction, Bits 3-0=endpoint number
-    u8  Attributes;      // Bits 1-0=transfer type (0=control, 1=iso, 2=bulk, 3=interrupt)
-    u16 MaxPacketSize;
-    u8  Interval; // Polling interval in ms
-} __attribute__((packed));
-
 __attribute__((interrupt)) void OHCIInterruptHandler(struct CPUInterruptFrame *Frame);
-void OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer, u16 MaxPacketSize);
+bool OHCIDeviceSendControlRequest(struct OHCIDevice *Device, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer);
+bool OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer, u16 MaxPacketSize);
+bool OHCIInitializeDevice(u32 Port);
+
 void InitializeUSBController(struct PCIConfig *Config) {
     Print("Detected ");
     switch (Config->Interface) {
@@ -410,9 +530,12 @@ void InitializeUSBController(struct PCIConfig *Config) {
     }
 
     gOHCIRegisters->CommandStatus.HostControllerReset = 1;
-    SleepMS(1);
-    if (gOHCIRegisters->CommandStatus.HostControllerReset == 1) {
-        Panic("OHCI controller reset was too slow");
+    u32 ResetTimeout                                  = 100;
+    while (gOHCIRegisters->CommandStatus.HostControllerReset) {
+        SleepMS(1);
+        if (--ResetTimeout == 0) {
+            Panic("OHCI controller reset timed out");
+        }
     }
 
     if (gOHCIRegisters->Control.HostControllerFunctionalState != 0b11) {
@@ -433,8 +556,7 @@ void InitializeUSBController(struct PCIConfig *Config) {
     void *HCCABase      = AllocatePages(NumberOfPages);
     MemSet(HCCABase, 0, NumberOfPages * PAGE_SIZE);
 
-    gOHCIRegisters->Control.Value = 0x00000000;
-    SleepMS(10);
+    gOHCIRegisters->Control.Value       = 0x00000000;
     gOHCIRegisters->Control.Value       = 0x000000C0;
     gOHCIRegisters->FMInterval.Value    = 0xA7782EDF;
     gOHCIRegisters->PeriodicStart.Value = 0x00002A2F;
@@ -444,13 +566,14 @@ void InitializeUSBController(struct PCIConfig *Config) {
 
     gOHCIRegisters->RHDescriptorA.PowerSwitchingMode = 0;
     gOHCIRegisters->RHDescriptorA.NoPowerSwitching   = 1;
+    SleepMS(gOHCIRegisters->RHDescriptorA.PowerOnToPowerGoodTime * 2);
 
     for (u32 Port = 0; Port < NumPorts; ++Port) {
         gOHCIRegisters->RHDescriptorB.PortPowerControlMask |= (1 << (Port + 17));
     }
-    gOHCIRegisters->HCCA.HCCA_BaseAddress = (u32) (usize) HCCABase >> 8;
-    gOHCI.HCCABase                        = HCCABase;
-    gOHCI.ControlHead                     = AllocatePages(1);
+    gOHCIRegisters->HCCA.Value = (u32) (usize) HCCABase;
+    gOHCI.HCCABase             = HCCABase;
+    gOHCI.ControlHead          = AllocatePages(1);
     MemSet(gOHCI.ControlHead, 0, PAGE_SIZE);
     gOHCIRegisters->ControlHeadED.Pointer = (u32) (usize) gOHCI.ControlHead >> 4;
     gOHCI.BulkHead                        = AllocatePages(1);
@@ -463,23 +586,32 @@ void InitializeUSBController(struct PCIConfig *Config) {
     gOHCIRegisters->Control.Value         = 0x000006B0;
     gOHCIRegisters->RHStatus.Value        = 0x00008000;
     gOHCIRegisters->InterruptStatus.Value = 0x00000004;
-    gOHCIRegisters->InterruptEnable.Value = 0xC000001B;
-
+    gOHCIRegisters->InterruptEnable.Value = 0xC0000012;
     for (u32 Port = 0; Port < NumPorts; ++Port) {
         if (!gOHCIRegisters->PortStatus[Port].CurrentConnectStatus)
             continue;
         gOHCIRegisters->PortStatus[Port].PortResetStatus = 1;
-        do {
-            SleepMS(10);
-        } while (gOHCIRegisters->PortStatus[Port].PortResetStatusChange != 1);
+        u32 ResetTimeout                                 = 500;
+        while (gOHCIRegisters->PortStatus[Port].PortResetStatus) {
+            SleepMS(1);
+            if (--ResetTimeout == 0) {
+                DebugLinef("Port %d reset timed out", Port);
+                break;
+            }
+        }
         gOHCIRegisters->PortStatus[Port].PortResetStatusChange = 1;
         if (gOHCIRegisters->PortStatus[Port].LowSpeedDeviceAttached) {
             DebugLinef("+USB Port[%d/%d]: Mode = Low Speed", Port + 1, NumPorts);
+            gOHCI.Ports[Port].FullSpeed = false;
         } else {
             DebugLinef("+USB Port[%d/%d]: Mode = Full Speed", Port + 1, NumPorts);
+            gOHCI.Ports[Port].FullSpeed = true;
         }
         gOHCIRegisters->PortStatus[Port].PortEnableStatus = 1;
     }
+
+    // Allow USB devices to "wake up"
+    SleepMS(10);
 
     // Create control ED list
     struct OHCIEndpointDescriptor *Current = gOHCI.ControlHead;
@@ -500,24 +632,35 @@ void InitializeUSBController(struct PCIConfig *Config) {
     }
     gOHCI.BulkHead[CONTROL_BULK_LIST_SIZE - 1].NextED = 0;
 
-    // Create tree of periodic EDs
     gOHCI.PeriodicEDStorage = AllocatePages(1);
+    MemSet(gOHCI.PeriodicEDStorage, 0, PAGE_SIZE);
     for (u32 i = 0; i < 32; ++i) {
         u32 Row1Index                          = BIT0(i) * 8 + BIT1(i) * 4 + BIT2(i) * 2 + BIT3(i) * 1;
         gOHCI.HCCABase->EndpointDescriptors[i] = (u32) (uintptr_t) &gOHCI.PeriodicEDStorage[Row1Index];
+        gOHCI.Period16MSIndex                  = Row1Index;
 
         u32 Row2Index                             = BIT0(i) * 4 + BIT1(i) * 2 + BIT2(i) * 1 + 16;
         gOHCI.PeriodicEDStorage[Row1Index].NextED = (u32) (uintptr_t) &gOHCI.PeriodicEDStorage[Row2Index];
+        gOHCI.Period8MSIndex                      = Row2Index;
 
         u32 Row3Index                             = BIT0(i) * 2 + BIT1(i) * 1 + 16 + 8;
         gOHCI.PeriodicEDStorage[Row2Index].NextED = (u32) (uintptr_t) &gOHCI.PeriodicEDStorage[Row3Index];
+        gOHCI.Period4MSIndex                      = Row3Index;
 
         u32 Row4Index                             = BIT0(i) * 1 + 16 + 8 + 4;
         gOHCI.PeriodicEDStorage[Row3Index].NextED = (u32) (uintptr_t) &gOHCI.PeriodicEDStorage[Row4Index];
+        gOHCI.Period2MSIndex                      = Row4Index;
 
         u32 Row5Index                             = 16 + 8 + 4 + 2;
         gOHCI.PeriodicEDStorage[Row4Index].NextED = (u32) (uintptr_t) &gOHCI.PeriodicEDStorage[Row5Index];
+        gOHCI.Period1MSIndex                      = Row5Index;
     }
+    for (u32 i = 0; i < 31; i++) {
+        gOHCI.PeriodicEDStorage[i].Control.Skip = 1;
+    }
+
+    gOHCIRegisters->Control.PeriodicListEnable = 1;
+
     gOHCI.RequestStorage = AllocatePages(1);
     MemSet(gOHCI.RequestStorage, 0, PAGE_SIZE);
 
@@ -525,69 +668,329 @@ void InitializeUSBController(struct PCIConfig *Config) {
     gOHCI.RequestStorage->Endpoint.NextED = (u32) (usize) (&gOHCI.ControlHead[1]);
     gOHCI.ControlHead[0].Control.Skip     = 0;
 
-    // --- Initialize Endpoint Descriptor ---
     gOHCI.RequestStorage->Endpoint.Control.FunctionAddress = 0;
     gOHCI.RequestStorage->Endpoint.Control.EndpointNumber  = 0;
     gOHCI.RequestStorage->Endpoint.Control.Direction       = 0b00;
     gOHCI.RequestStorage->Endpoint.Control.LowSpeed        = 0b0;
-    gOHCI.RequestStorage->Endpoint.Control.Skip            = 0;
-    gOHCI.RequestStorage->Endpoint.Control.Format          = 0;
-    gOHCI.RequestStorage->Endpoint.Control.MaxPacketSize   = 64;
-    gOHCI.RequestStorage->Endpoint.HeadPointer.ToggleCarry = 0;
-    gOHCI.RequestStorage->Endpoint.HeadPointer.Halted      = 0;
 
-    gOHCIRegisters->CommandStatus.ControlListFilled = 1;
-    gOHCIRegisters->Control.Value                   = 0x0000190;
-
-    struct OHCIDeviceDescriptor Descriptors[64] = {0};
-
+    gOHCI.Devices[0].Active = true;
     for (u32 PortNum = 0; PortNum < NumPorts; ++PortNum) {
         if (!gOHCIRegisters->PortStatus[PortNum].CurrentConnectStatus)
             continue;
 
-        struct OHCIDeviceDescriptor desc;
-        gOHCI.RequestStorage->Endpoint.Control.FunctionAddress = 0;
-        OHCISendControlRequest(0, 0x80, 0x06, 0x0100, 0, 18, &desc, 0x8);
-
-        u32 DeviceAddress                                      = PortNum + 1;
-        gOHCI.RequestStorage->Endpoint.Control.FunctionAddress = 0;
-        OHCISendControlRequest(0, 0x00, 0x05, DeviceAddress, 0, 0, NULL, 0x8);
-
-        gOHCI.RequestStorage->Endpoint.Control.FunctionAddress = DeviceAddress;
-        OHCISendControlRequest(DeviceAddress, 0x80, 0x06, 0x0100, 0, 18, &desc, 0x8);
-        DebugLinef("+USB Device[%d]: VendorID = %04X, ProductID = %04X, Class = %04X, Subclass = %04X, Protocol = %04X, Max packet size = %04X",
-                   DeviceAddress,
-                   desc.VendorID,
-                   desc.ProductID,
-                   desc.DeviceClass,
-                   desc.SubClass,
-                   desc.Protocol,
-                   desc.MaxPacketSize);
-        Descriptors[DeviceAddress] = desc;
-    }
-
-    for (u32 DeviceAddress = 1; DeviceAddress <= NumPorts; ++DeviceAddress) {
-        struct OHCIDeviceDescriptor desc;
-        OHCISendControlRequest(DeviceAddress, 0x80, 0x06, 0x0100, 0, 18, &desc, 0x8);
-        SleepMS(10);
-
-        if (desc.VendorID == 0 && desc.ProductID == 0) {
-            continue;
-        }
-
-        DebugLinef("+USB Device[%d]: %04X:%04X, MaxPacketSize=%d", DeviceAddress, desc.VendorID, desc.ProductID, desc.MaxPacketSize);
-
-        if (desc.DeviceClass == 0x00) {
-            DebugLinef("  Class defined at interface level, reading config...");
-
-            u8 ConfigBuffer[256];
-            OHCISendControlRequest(DeviceAddress, 0x80, 0x06, 0x0200, 0, 256, ConfigBuffer, desc.MaxPacketSize);
-            SleepMS(10);
+        if (!OHCIInitializeDevice(PortNum)) {
+            DebugLinef("Failed to initialize OHCI port: %d", PortNum);
         }
     }
 }
 
-void OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer, u16 MaxPacketSize) {
+bool OHCIDetectHIDDevice(struct OHCIDevice *Device);
+bool OHCIDetectHubDevice(struct OHCIDevice *Device);
+bool OHCIDetectMassStorageDevice(struct OHCIDevice *Device);
+bool OHCIDeviceGetString(struct OHCIDevice *Device, u8 StringIndex, char *OutString, usize Length);
+bool OHCIInitializeDevice(u32 Port) {
+    struct OHCIDeviceDescriptor Descriptor;
+    if (!OHCISendControlRequest(0,
+                                USB_DIR_DEVICE_TO_HOST,
+                                USB_REQ_GET_DESCRIPTOR,
+                                USB_DESC_DEVICE,
+                                0,
+                                sizeof(struct OHCIDeviceDescriptor),
+                                &Descriptor,
+                                0x8)) {
+        DebugLinef("OHCI port init failed: 1");
+        return false;
+    }
+
+    // Find index of first non-Active device in the device list to get new function address
+    i32 Address = -1;
+    for (u32 i = 0; i < USB_MAX_DEVICES; ++i) {
+        if (!gOHCI.Devices[i].Active) {
+            Address = i;
+            break;
+        }
+    }
+    if (Address == -1) {
+        DebugLinef("Could not initialize OHCI USB device: could not allocate a function address (none left?)");
+        return false;
+    }
+
+    struct OHCIDevice *Device = &gOHCI.Devices[Address];
+    Device->Port              = &gOHCI.Ports[Port];
+    u32 MaxPacketSize         = Descriptor.MaxPacketSize;
+    if (!OHCISendControlRequest(0, USB_DIR_HOST_TO_DEVICE, USB_REQ_SET_ADDRESS, Address, 0, 0, NULL, MaxPacketSize)) {
+        DebugLinef("OHCI port init failed: 2");
+        return false;
+    }
+
+    SleepMS(2);
+
+    // Make sure we can talk to the device on the new address
+    if (!OHCISendControlRequest(Address, 0x80, 0x06, 0x0100, 0, 18, &Descriptor, MaxPacketSize)) {
+        DebugLinef("OHCI port init failed: 3");
+        return false;
+    }
+
+    Device->Active          = true;
+    Device->Descriptor      = Descriptor;
+    Device->FunctionAddress = Address;
+
+    OHCIDeviceGetString(Device, Descriptor.ProductIndex, Device->ProductString, sizeof(Device->ProductString));
+    OHCIDeviceGetString(Device, Descriptor.ManufacturerIndex, Device->ManufacturerString, sizeof(Device->ManufacturerString));
+
+    DebugLinef("+USB Device[%d]: VendorID = %04X, ProductID = %04X, Class = %04X, Subclass = %04X, Protocol = %04X, Product = %s, Manufacturer = %s",
+               Address,
+               Descriptor.VendorID,
+               Descriptor.ProductID,
+               Descriptor.DeviceClass,
+               Descriptor.SubClass,
+               Descriptor.Protocol,
+               Device->ProductString,
+               Device->ManufacturerString);
+
+    if (!OHCIDeviceSendControlRequest(Device,
+                                      USB_DIR_DEVICE_TO_HOST,
+                                      USB_REQ_GET_DESCRIPTOR,
+                                      USB_DESC_CONFIGURATION,
+                                      0,
+                                      sizeof(Device->Buffer),
+                                      &Device->Buffer)) {
+        DebugLinef("OHCI port init failed: 4");
+        return false;
+    }
+
+    struct OHCIConfigDescriptor *Config = (struct OHCIConfigDescriptor *) Device->Buffer;
+    DebugLinef("\tInterface Count = %d, Attributes = %b", Config->NumInterfaces, Config->Attributes);
+    struct OHCIInterfaceDescriptor *Interface = (struct OHCIInterfaceDescriptor *) (Device->Buffer + Config->Length);
+    // TODO: support multiple interfaces
+    DebugLinef("\tInterface[0]");
+    DebugLinef("\t\tClass = %x, Subclass = %x, Protocol = %x", Interface->InterfaceClass, Interface->InterfaceSubClass, Interface->InterfaceProtocol);
+
+    Device->HasConfigAndInterface = true;
+    Device->Config                = Config;
+    Device->Interface             = Interface;
+
+    if (gOHCI.Devices[Address].HasConfigAndInterface) {
+        switch (gOHCI.Devices[Address].Interface->InterfaceClass) {
+        case USB_INTERFACE_HID:
+            if (!OHCIDetectHIDDevice(&gOHCI.Devices[Address])) {
+                DebugLinef("Failed to initialize HID OHCI device");
+            }
+            break;
+        case USB_INTERFACE_MASS_STORAGE:
+            if (!OHCIDetectMassStorageDevice(&gOHCI.Devices[Address])) {
+                DebugLinef("Failed to initialize Mass Storage OHCI device");
+            }
+            break;
+        case USB_INTERFACE_HUB:
+            if (!OHCIDetectHubDevice(&gOHCI.Devices[Address])) {
+                DebugLinef("Failed to initialize hub OHCI device");
+            }
+            break;
+        default:
+            DebugLinef("Unsupported USB interface class: %d", gOHCI.Devices[Address].Interface->InterfaceClass);
+            return false;
+        };
+    }
+    return true;
+}
+
+void ConvertUTF16LEToASCII(u16 *String, i32 Length, char *AsciiOut) {
+    for (i32 i = 0; i < Length; i++) {
+        AsciiOut[i] = (char) (String[i] & 0xFF);
+    }
+    AsciiOut[Length] = 0;
+}
+
+bool OHCIDeviceGetString(struct OHCIDevice *Device, u8 StringIndex, char *OutString, usize Length) {
+    static struct OHCIUSBStringDescriptor Data = {0};
+    MemSet(&Data, 0, sizeof(struct OHCIUSBStringDescriptor));
+    if (!OHCIDeviceSendControlRequest(Device,
+                                      USB_DIR_DEVICE_TO_HOST,
+                                      USB_REQ_GET_DESCRIPTOR,
+                                      (USB_DESC_STRING) | StringIndex,
+                                      0x0409,
+                                      sizeof(Data),
+                                      &Data)) {
+        return false;
+    }
+
+    MemSet(OutString, 0, Length);
+    i32 CharCount = (Data.Length - 2) / 2;
+    ConvertUTF16LEToASCII((u16 *) Data.String, CharCount, OutString);
+    return true;
+}
+
+bool OHCIDetectHIDDevice(struct OHCIDevice *Device) {
+    if (!Device->HasConfigAndInterface)
+        return false;
+    if (Device->Interface->InterfaceClass != 3)
+        return false;
+    if (Device->Interface->InterfaceSubClass != 1) {
+        DebugLinef("USB HID device was not a boot device, unsupported");
+        return false;
+    }
+
+    char *DeviceType = NULL;
+    switch (Device->Interface->InterfaceProtocol) {
+    case 1:
+        DeviceType = "Keyboard";
+        break;
+    case 2:
+        DeviceType = "Mouse";
+        break;
+    default:
+        DebugLinef("HID device has unsupported protocol number: %d", Device->Interface->InterfaceProtocol);
+        return false;
+    };
+
+    struct OHCIHIDDescriptor         *HIDDescriptor = (struct OHCIHIDDescriptor *) ((u8 *) Device->Interface + Device->Interface->Length);
+    struct OHCIUSBEndpointDescriptor *USBED         = (struct OHCIUSBEndpointDescriptor *) ((u8 *) HIDDescriptor + HIDDescriptor->Length);
+    Device->HID.EndpointNumber                      = USBED->EndpointAddress & 0x0F;
+    Device->HID.Direction                           = (USBED->EndpointAddress & 0x80) >> 7;
+    Device->HID.Interval                            = USBED->Interval;
+
+    PrintLinef(
+        "USB Device[%d]: %s(%s): Detected as HID device. Type = %s, Country Code = %X, HID = %X, Polling rate = %dms, Endpoint = %d, Direction = %d",
+        Device->FunctionAddress,
+        Device->ProductString,
+        Device->ManufacturerString,
+        DeviceType,
+        HIDDescriptor->CountryCode,
+        HIDDescriptor->HID,
+        Device->HID.Interval,
+        Device->HID.EndpointNumber,
+        Device->HID.Direction);
+    OHCIDeviceSendControlRequest(Device, USB_DIR_HOST_TO_DEVICE | USB_TYPE_STANDARD | USB_RECIP_DEVICE, USB_REQ_SET_CONFIGURATION, 1, 0, 0, NULL);
+
+    Device->HID.EndpointDescriptor = AllocatePages(1);
+    MemSet(Device->HID.EndpointDescriptor, 0, sizeof(*Device->HID.EndpointDescriptor));
+    Device->HID.TransferDescriptor = AllocatePages(1);
+    MemSet(Device->HID.TransferDescriptor, 0, sizeof(*Device->HID.TransferDescriptor));
+    Device->HID.DummyTransferDescriptor = AllocatePages(1);
+    MemSet(Device->HID.DummyTransferDescriptor, 0, sizeof(*Device->HID.DummyTransferDescriptor));
+
+    Device->HID.EndpointDescriptor->Control.FunctionAddress = Device->FunctionAddress;
+    Device->HID.EndpointDescriptor->Control.EndpointNumber  = Device->HID.EndpointNumber;
+    Device->HID.EndpointDescriptor->Control.Direction       = 0b10; // IN
+    Device->HID.EndpointDescriptor->Control.MaxPacketSize   = USBED->MaxPacketSize;
+    Device->HID.EndpointDescriptor->HeadPointer.Value       = (u32) ((usize) Device->HID.TransferDescriptor);
+    Device->HID.EndpointDescriptor->HeadPointer.ToggleCarry = 1;
+    Device->HID.EndpointDescriptor->TailPointer             = (u32) ((usize) Device->HID.DummyTransferDescriptor);
+
+    Device->HID.TransferDescriptor->Control.DirectionPID   = 0b10; // IN
+    Device->HID.TransferDescriptor->Control.DelayInterrupt = 0b0;
+    Device->HID.TransferDescriptor->Control.DataToggle     = 0b11;
+    Device->HID.TransferDescriptor->CurrentBufferPointer   = (u32) (usize) (Device->HID.Data);
+    Device->HID.TransferDescriptor->BufferEnd              = (u32) (usize) ((char *) Device->HID.Data + USBED->MaxPacketSize - 1);
+    Device->HID.TransferDescriptor->NextTD                 = (u32) (usize) Device->HID.DummyTransferDescriptor;
+
+    usize Index = 0;
+    if (Device->HID.Interval >= 16) {
+        Index = gOHCI.Period16MSIndex;
+    } else if (Device->HID.Interval >= 8) {
+        Index = gOHCI.Period8MSIndex;
+    } else if (Device->HID.Interval >= 4) {
+        Index = gOHCI.Period4MSIndex;
+    } else if (Device->HID.Interval >= 2) {
+        Index = gOHCI.Period2MSIndex;
+    } else if (Device->HID.Interval >= 1) {
+        Index = gOHCI.Period1MSIndex;
+    } else {
+        // Assume standard
+        Index = gOHCI.Period8MSIndex;
+    }
+
+    struct OHCIEndpointDescriptor *ED = &gOHCI.PeriodicEDStorage[Index];
+
+    Device->HID.EndpointDescriptor->NextED = ED->NextED;
+    ED->NextED                             = (u32) (usize) Device->HID.EndpointDescriptor;
+    return true;
+}
+
+bool OHCIDetectMassStorageDevice(struct OHCIDevice *Device) {
+    if (!Device->HasConfigAndInterface)
+        return false;
+    if (Device->Interface->InterfaceClass != 8)
+        return false;
+    char *CommandSet = NULL;
+    switch (Device->Interface->InterfaceSubClass) {
+    case 6:
+        CommandSet = "SCSI Transparent";
+        break;
+    default:
+        CommandSet = "Unknown";
+        break;
+    };
+    char *Transport = NULL;
+    switch (Device->Interface->InterfaceProtocol) {
+    case 0x50:
+        Transport = "Bulk-only";
+        break;
+    default:
+        Transport = "Unknown";
+        break;
+    };
+    PrintLinef("USB Device[%d]: %s(%s): Detected as Mass-Storage device. Command Set = %s, Transport = %s",
+               Device->FunctionAddress,
+               Device->ProductString,
+               Device->ManufacturerString,
+               CommandSet,
+               Transport);
+
+    return true;
+}
+
+bool OHCIDetectHubDevice(struct OHCIDevice *Device) {
+    struct OHCIUSBHubDescriptor HubDesc = {0};
+    OHCIDeviceSendControlRequest(Device, 0xA0, USB_REQ_GET_DESCRIPTOR, USB_DESC_HUB, 0, sizeof(struct OHCIUSBHubDescriptor), &HubDesc);
+
+    u8 NumPorts = HubDesc.bNbrPorts;
+    PrintLinef("USB Device[%d]: %s(%s): Detected as Hub device. Ports = %d",
+               Device->FunctionAddress,
+               Device->ProductString,
+               Device->ManufacturerString,
+               NumPorts);
+
+    for (u32 Port = 1; Port <= NumPorts; Port++) {
+        OHCIDeviceSendControlRequest(Device, USB_DIR_HOST_TO_DEVICE | USB_TYPE_CLASS | USB_RECIP_OTHER, 0x03, 8, Port, 0, NULL);
+        SleepMS(1);
+        OHCIDeviceSendControlRequest(Device, USB_DIR_HOST_TO_DEVICE | USB_TYPE_CLASS | USB_RECIP_OTHER, 0x03, 4, Port, 0, NULL);
+    }
+    SleepMS(1);
+
+    for (u32 Port = 1; Port <= NumPorts; Port++) {
+        struct OHCIUSBPortStatus PortStatus = {0};
+        OHCIDeviceSendControlRequest(Device,
+                                     USB_DIR_DEVICE_TO_HOST | USB_TYPE_CLASS | USB_RECIP_OTHER,
+                                     USB_REQ_GET_STATUS,
+                                     0,
+                                     Port,
+                                     sizeof(struct OHCIUSBPortStatus),
+                                     &PortStatus);
+        // Port connected bit
+        if (!(PortStatus.PortStatus & 0x0001)) {
+            continue;
+        }
+
+        // Port enabled bit
+        if (!(PortStatus.PortStatus & 0x0002)) {
+            continue;
+        }
+        if (!OHCIInitializeDevice(Port)) {
+            DebugLinef("Failed to init port");
+        }
+    }
+    return true;
+}
+
+bool OHCIDeviceSendControlRequest(struct OHCIDevice *Device, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer) {
+    u32 MaxPacketSize   = Device->Descriptor.MaxPacketSize;
+    u32 FunctionAddress = Device->FunctionAddress;
+    return OHCISendControlRequest(FunctionAddress, RequestType, Request, Value, Index, Count, DataBuffer, MaxPacketSize);
+}
+volatile bool gOHCITransferComplete = false;
+bool OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 Value, u16 Index, u16 Count, void *DataBuffer, u16 MaxPacketSize) {
     gOHCI.RequestStorage->Endpoint.Control.MaxPacketSize   = MaxPacketSize;
     gOHCI.RequestStorage->Endpoint.Control.FunctionAddress = FunctionAddress;
     if (Count > 0 && DataBuffer) {
@@ -595,8 +998,6 @@ void OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 
     }
 
     gOHCIRegisters->Control.ControlListEnable = 0;
-    SleepMS(1);
-    gOHCIRegisters->ControlCurrentED.Value = 0;
 
     gOHCI.RequestStorage->Request.RequestType = RequestType;
     gOHCI.RequestStorage->Request.Request     = Request;
@@ -666,22 +1067,69 @@ void OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 
     gOHCI.RequestStorage->Endpoint.TailPointer             = (u32) (usize) (&gOHCI.RequestStorage->TransferDescriptor[DummyTDIndex]);
 
     gOHCI.HCCABase->DoneHead                        = 0;
-    gOHCIRegisters->InterruptStatus.Value           = 2;
     gOHCIRegisters->CommandStatus.ControlListFilled = 1;
     gOHCIRegisters->Control.ControlListEnable       = 1;
 
-    u32 Timeout = 500;
-    while ((gOHCIRegisters->InterruptStatus.Value & 2) == 0 && --Timeout) {
+    gOHCITransferComplete = false;
+    u32 Timeout           = 100;
+    while (!gOHCITransferComplete && --Timeout) {
         SleepMS(1);
     }
-    if (Timeout == 0) {
-        DebugLinef("Timed out");
-    }
-    gOHCIRegisters->InterruptStatus.Value = 2;
+    return Timeout != 0;
 }
 
 void OHCIInterruptHandler(struct CPUInterruptFrame *Frame) {
-    u32 Status = gOHCIRegisters->InterruptStatus.Value;
-    // DebugLinef("Interrupt %b", Status);
-    // gOHCIRegisters->InterruptStatus.Value = Status;
+    DisableInterrupts();
+    union OHCIInterruptRegister Status = gOHCIRegisters->InterruptStatus;
+
+    if (Status.WritebackDoneHead) {
+        u32 DoneQueueHead = gOHCI.HCCABase->DoneHead & 0xFFFFFFFE;
+
+        gOHCI.HCCABase->DoneHead = 0;
+
+        while (DoneQueueHead != 0) {
+            struct OHCIGeneralTransferDescriptor *CompletedTD = (struct OHCIGeneralTransferDescriptor *) (usize) DoneQueueHead;
+
+            u32 NextCompletedTD                 = CompletedTD->NextTD;
+            CompletedTD->Control.ErrorCount     = 0;
+            CompletedTD->Control.DelayInterrupt = 0;
+
+            bool IsControl = false;
+            if (CompletedTD >= &gOHCI.RequestStorage->TransferDescriptor[0] && CompletedTD < &gOHCI.RequestStorage->TransferDescriptor[64]) {
+                gOHCITransferComplete = true;
+                IsControl             = true;
+            }
+
+            if (!IsControl) {
+                for (u32 i = 0; i < USB_MAX_DEVICES; i++) {
+                    struct OHCIDevice *Dev = &gOHCI.Devices[i];
+                    if (!Dev->Active || Dev->Interface->InterfaceClass != USB_INTERFACE_HID)
+                        continue;
+
+                    if ((usize) CompletedTD == (usize) Dev->HID.TransferDescriptor) {
+                        if (CompletedTD->Control.ConditionCode == 0) {
+                            Print("D");
+                        } else {
+                            DebugLinef("HID Error CC: %x", CompletedTD->Control.ConditionCode);
+                        }
+
+                        CompletedTD->CurrentBufferPointer = (u32) (usize) Dev->HID.Data;
+                        CompletedTD->BufferEnd = (u32) (usize) ((char *) Dev->HID.Data + Dev->HID.EndpointDescriptor->Control.MaxPacketSize - 1);
+                        CompletedTD->NextTD    = (u32) (usize) Dev->HID.DummyTransferDescriptor;
+
+                        u32 CurrentHead                                = Dev->HID.EndpointDescriptor->HeadPointer.Value;
+                        Dev->HID.EndpointDescriptor->HeadPointer.Value = ((u32) ((usize) CompletedTD) & 0xFFFFFFF0) | (CurrentHead & 0x00000002);
+                        break;
+                    }
+                }
+            }
+
+            DoneQueueHead = NextCompletedTD;
+        }
+    }
+
+    gOHCIRegisters->InterruptStatus.Value = Status.Value;
+    EnableInterrupts();
+    OutByte(0x20, 0x20);
+    OutByte(0xA0, 0x20);
 }

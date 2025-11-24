@@ -2,10 +2,10 @@
 #define KERNEL_STACK_PAGES 256
 #include "elf_libc.c"
 
-#include "./kernel/Allocator.c"
-#include "./kernel/GlobalDescriptorTable.c"
-#include "./kernel/ProgrammableIntervalTimer.c"
-#include "./kernel/PCI.c"
+#include "kernel/Allocator.c"
+#include "kernel/GlobalDescriptorTable.c"
+#include "kernel/PCI.c"
+#include "kernel/ProgrammableIntervalTimer.c"
 
 int main(void) {
     struct MemoryLayout    *Layout      = GetMemoryLayout();
@@ -33,8 +33,7 @@ int main(void) {
     EnableProgrammableIntervalTimer(1000);
     ScanPCIBus();
 
-    for (;;)
-    {
+    for (;;) {
         // PrintLinef("test");
     }
 

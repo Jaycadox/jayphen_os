@@ -1,6 +1,6 @@
 #pragma once
-#include "../elf_libc.c"
 #include "InterruptDescriptorTable.c"
+#include "elf_libc.c"
 
 struct CPUInterruptFrame {
     u64 Rip, Cs, RFlags, Rsp, Ss;

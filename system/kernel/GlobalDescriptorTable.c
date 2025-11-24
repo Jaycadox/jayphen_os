@@ -1,7 +1,6 @@
 #pragma once
-#include "../elf_libc.c"
-#include "./Allocator.c"
 #include "TaskStateSegment.c"
+#include "elf_libc.c"
 
 struct GlobalDescriptorTableLayout {
     u16                                Size; // sizeof(GDT) - 1, in bytes

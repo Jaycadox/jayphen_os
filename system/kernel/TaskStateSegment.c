@@ -1,5 +1,5 @@
 #pragma once
-#include "../elf_libc.c"
+#include "elf_libc.c"
 
 struct TaskStateSegmentEntry {
     u32 Reserved;

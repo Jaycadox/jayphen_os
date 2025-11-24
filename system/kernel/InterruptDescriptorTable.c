@@ -1,5 +1,5 @@
 #pragma once
-#include "../elf_libc.c"
+#include "elf_libc.c"
 
 struct InterruptDescriptorTableLayout {
     u16                                   Size; // sizeof(IDT) - 1, in bytes
@@ -19,8 +19,8 @@ struct InterruptDescriptorTableEntry {
 _Static_assert(sizeof(struct InterruptDescriptorTableEntry) == 16, "IDT entry wrong size");
 
 #define MAX_IDT_ENTRIES 256
-static struct InterruptDescriptorTableEntry  gIDTEntries[MAX_IDT_ENTRIES]              = {0};
-static struct InterruptDescriptorTableLayout gIDTLayout                                = {0};
+static struct InterruptDescriptorTableEntry  gIDTEntries[MAX_IDT_ENTRIES] = {0};
+static struct InterruptDescriptorTableLayout gIDTLayout                   = {0};
 static u16                                   gKernelCodeIDTSelector;
 
 enum InterruptDescriptorTableFlag {
@@ -67,7 +67,6 @@ void SetInterruptDescriptorTableEntry(enum InterruptType Type, u16 IDTSelector, 
 
     gIDTEntries[Type].Offset1                  = (usize) Handler & 0xFFFF;
     gIDTEntries[Type].Selector                 = IDTSelector;
-    u8 IST = UseISTStack ? 1 : 0;
     gIDTEntries[Type].InterruptStackTableIndex = UseISTStack ? 1 : 0;
     gIDTEntries[Type].Flags                    = Flags;
     gIDTEntries[Type].Offset2                  = ((usize) Handler >> 16) & 0xFFFF;
@@ -99,8 +98,8 @@ void SetDriverInterruptDescriptorTableEntry(u8 IRQNumber, void *Handler) {
 
 void InitializeInterruptDescriptorTable(u16 KernelCodeIDTSelector) {
     gKernelCodeIDTSelector = KernelCodeIDTSelector;
-    gIDTLayout.Size    = sizeof(gIDTEntries) - 1;
-    gIDTLayout.Entries = gIDTEntries;
+    gIDTLayout.Size        = sizeof(gIDTEntries) - 1;
+    gIDTLayout.Entries     = gIDTEntries;
 
     MemSet(&gIDTEntries, 0, sizeof(gIDTEntries));
 

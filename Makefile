@@ -3,7 +3,7 @@ SYSTEM_CC := clang
 LD := lld
 ASM := nasm
 
-CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave
+CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave -O0
 CFLAGS := $(CFLAGS_GENERIC) -target x86_64-unknown-windows -Iedk2/MdePkg/Include -Iedk2/MdePkg/Include/X64 -I/usr/include
 LDFLAGS := -flavor link -subsystem:efi_application -entry:EFIMain
 ASMFLAGS := -f win64
@@ -22,7 +22,7 @@ test_shim: elf_loader/test_shim.c elf_loader/elfloader.c
 SYSTEM_PROGRAMS := system/HigherOrLower.c system/StartKernel.c
 BINARIES := $(patsubst system/%.c,%,$(SYSTEM_PROGRAMS))
 $(BINARIES): %: system/%.c
-	$(SYSTEM_CC) $(CFLAGS_GENERIC) -Wl,--no-dynamic-linker -Wl,-z,norelro -Wl,-static -o root/$@.elf $<
+	$(SYSTEM_CC) $(CFLAGS_GENERIC) -Wl,--no-dynamic-linker -Wl,-z,norelro -Wl,-static -I./system/ -o root/$@.elf $<
 
 bootx64.efi: uefiboot.o sysv_elf_compat.o $(BINARIES)
 	$(LD) $(LDFLAGS) obj/uefiboot.o obj/sysv_elf_compat.o -out:root/EFI/boot/$@
@@ -31,7 +31,8 @@ bootx64.efi: uefiboot.o sysv_elf_compat.o $(BINARIES)
 
 qemu: bootx64.efi
 	cp /usr/share/edk2/x64/OVMF.4m.fd .
-	qemu-system-x86_64 --machine q35 --enable-kvm --cpu host -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -usb -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0 -device usb-mouse,bus=ohci.0 -device usb-storage,bus=ohci.0,drive=fatdisk -drive if=none,id=fatdisk,format=raw,file=fat:rw:kernel_rootdir -m 4G
+	qemu-system-x86_64 --enable-kvm -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -usb -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0 -device usb-mouse,bus=ohci.0 -device usb-storage,bus=ohci.0,drive=fatdisk -drive if=none,id=fatdisk,format=raw,file=fat:rw:kernel_rootdir -m 1G
+
 
 
 all: bootx64.efi

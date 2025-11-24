@@ -7,7 +7,7 @@
 #define TERMINAL_FONT_RAW_Y 16
 #define TERMINAL_FONT_PX_Y (TERMINAL_FONT_RAW_Y * TERMINAL_FONT_SCALE)
 
-#include "../elf_libc.c"
+#include "elf_libc.c"
 #include "font8x16.h"
 #include "font8x8.h"
 
@@ -72,8 +72,8 @@ void TerminalPutChar(char Char) {
         struct FrameBufferPixel *Source = gFrameBuffer->Base + (TERMINAL_FONT_PX_Y * gFrameBuffer->Width);
         struct FrameBufferPixel *Dest   = gFrameBuffer->Base;
 
-        u32* DestPtr = (u32*)Dest;
-        u32* SrcPtr = (u32*)Source;
+        u32  *DestPtr    = (u32 *) Dest;
+        u32  *SrcPtr     = (u32 *) Source;
         usize PixelCount = NumBytes / 4;
 
         for (usize i = 0; i < PixelCount; ++i) {
@@ -92,7 +92,7 @@ void TerminalPutChar(char Char) {
     u64 CharacterYPos = CharacterYIndex * TERMINAL_FONT_PX_Y;
     u64 CharacterXPos = CharacterXIndex * TERMINAL_FONT_PX_X;
     if (Char != '\n' && Char != '\r' && Char != '\t') {
-        char *PixelData = font8x16[(usize) Char];
+        unsigned char *PixelData = font8x16[(usize) Char];
         for (u64 YOffset = 0; YOffset < TERMINAL_FONT_PX_Y; ++YOffset) {
             char RowData = PixelData[YOffset / TERMINAL_FONT_SCALE];
             for (u64 XOffset = 0; XOffset < TERMINAL_FONT_PX_X; ++XOffset) {
@@ -165,6 +165,7 @@ void PrintLinefv(const char *Format, va_list va) {
 #ifdef KERNEL_DEBUG
 void DebugLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));
 void DebugLinef(const char *Format, ...) {
+    DisableInterrupts();
     gTerminal.TextColourInit = true;
     gTerminal.TextColour     = TERMINAL_DEBUG_COLOUR;
     va_list args;
@@ -174,6 +175,7 @@ void DebugLinef(const char *Format, ...) {
     va_end(args);
     PrintLine(gScratch);
     gTerminal.TextColour = TERMINAL_DEFAULT_COLOUR;
+    EnableInterrupts();
 }
 #else
 void DebugLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));

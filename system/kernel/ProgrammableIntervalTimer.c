@@ -1,5 +1,5 @@
 #pragma once
-#include "../elf_libc.c"
+#include "elf_libc.c"
 
 void EnableProgrammableIntervalTimer(u32 FrequencyHz) {
     OutByte(0x20, 0x11);

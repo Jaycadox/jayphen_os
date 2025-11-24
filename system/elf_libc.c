@@ -19,11 +19,15 @@
 
 volatile usize TickCount = 0;
 
+void  DisableInterrupts();
+void  EnableInterrupts();
 void *memcpy(void *dst, const void *src, usize n) {
+    DisableInterrupts();
     uchar       *d = dst;
     const uchar *s = src;
     while (n--)
         *d++ = *s++;
+    EnableInterrupts();
     return dst;
 }
 
@@ -35,17 +39,21 @@ void *memset(void *dst, int c, usize n) {
     return dst;
 }
 
-void *MemSet(void *dst, usize c, usize n) {
+void *MemSet(void *dst, uchar c, usize n) {
+    DisableInterrupts();
     uchar *d = dst;
     while (n--)
-        *d++ = (uchar) c;
+        *d++ = c;
+    EnableInterrupts();
     return dst;
 }
 
 void MemMove(u8 *Dest, const u8 *Source, usize Count) {
+    DisableInterrupts();
     for (usize i = 0; i < Count; ++i) {
         Dest[i] = Source[i];
     }
+    EnableInterrupts();
 }
 
 size_t StrLen(const char *s) {
@@ -97,12 +105,17 @@ struct MemoryLayout *GetMemoryLayout(void) {
     return (struct MemoryLayout *) (usize) SYSINVOKE(4, 0);
 }
 
+static usize gInterruptStack = 0;
+
 void DisableInterrupts(void) {
+    ++gInterruptStack;
     __asm__ volatile("cli" ::: "memory");
 }
 
 void EnableInterrupts(void) {
-    __asm__ volatile("sti" ::: "memory");
+    if (--gInterruptStack == 0) {
+        __asm__ volatile("sti" ::: "memory");
+    }
 }
 
 #define STB_SPRINTF_IMPLEMENTATION

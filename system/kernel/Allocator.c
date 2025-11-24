@@ -1,5 +1,5 @@
 #pragma once
-#include "../elf_libc.c"
+#include "elf_libc.c"
 
 #define PAGE_SIZE 4096
 
@@ -60,7 +60,11 @@ void InitializeAllocator(struct MemoryLayout *MemoryLayout) {
     gAllocator.TotalPages   = 0;
 
     for (u32 i = 0; i < MemoryLayout->NumConventionalRegions; ++i) {
-        DebugLinef("Conventional Region #%d: 0x%016lX-0x%016lX (%ldMB)", i, MemoryLayout->ConventionalRegions[i].Start, MemoryLayout->ConventionalRegions[i].Start + MemoryLayout->ConventionalRegions[i].NumPages * PAGE_SIZE, MemoryLayout->ConventionalRegions[i].NumPages * PAGE_SIZE / (1024*1024));
+        DebugLinef("Conventional Region #%d: 0x%016lX-0x%016lX (%ldMB)",
+                   i,
+                   MemoryLayout->ConventionalRegions[i].Start,
+                   MemoryLayout->ConventionalRegions[i].Start + MemoryLayout->ConventionalRegions[i].NumPages * PAGE_SIZE,
+                   MemoryLayout->ConventionalRegions[i].NumPages * PAGE_SIZE / (1024 * 1024));
         gAllocator.TotalPages += MemoryLayout->ConventionalRegions[i].NumPages;
     }
     gAllocator.TotalPages -= 1; // Don't allow access to the first page
