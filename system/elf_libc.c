@@ -243,6 +243,17 @@ void Panic(const char *Format, ...) {
         ;
 }
 
+void TriggerTripleFault(void) {
+    u64 NullIDT[10] = {0};
+
+    __asm__ __volatile__("cli\n\t"
+                         "lidt %0\n\t"
+                         "int3\n\t"
+                         :
+                         : "m"(NullIDT)
+                         : "memory");
+}
+
 u8 InByte(u16 Port) {
     u8 Value;
     __asm__ volatile("inb %1, %0" : "=a"(Value) : "Nd"(Port));

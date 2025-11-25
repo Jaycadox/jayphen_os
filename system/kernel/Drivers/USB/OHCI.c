@@ -3,6 +3,7 @@
 #pragma once
 #include "elf_libc.c"
 #include "kernel/Allocator.c"
+#include "kernel/Input.c"
 #include "kernel/Interrupts.c"
 #include "kernel/PCI.c"
 
@@ -414,6 +415,39 @@ struct OHCIPort {
     bool FullSpeed;
 };
 
+enum USBHIDClass { KEYBOARD, MOUSE };
+
+union HIDKeyboardReport {
+    u64 Value;
+    struct __attribute__((packed)) {
+        volatile u8 LeftCtrl : 1;
+        volatile u8 LeftShift : 1;
+        volatile u8 LeftAlt : 1;
+        volatile u8 LeftGUI : 1;
+        volatile u8 RightCtrl : 1;
+        volatile u8 RightShift : 1;
+        volatile u8 RightAlt : 1;
+        volatile u8 RightGUI : 1;
+        volatile u8 Reserved;
+        volatile u8 KeyCode[6];
+    };
+};
+
+union HIDMouseReport {
+    u32 Value;
+    struct __attribute__((packed)) {
+        volatile u8 Left : 1;
+        volatile u8 Right : 1;
+        volatile u8 Middle : 1;
+        volatile u8 Button3 : 1;
+        volatile u8 Button4 : 1;
+        volatile u8 Reserved : 3;
+        volatile i8 X;
+        volatile i8 Y;
+        volatile i8 Wheel;
+    };
+};
+
 struct OHCIDevice {
     char                            Buffer[256];
     struct OHCIDeviceDescriptor     Descriptor;
@@ -434,7 +468,12 @@ struct OHCIDevice {
             struct OHCIEndpointDescriptor        *EndpointDescriptor;
             struct OHCIGeneralTransferDescriptor *TransferDescriptor;
             struct OHCIGeneralTransferDescriptor *DummyTransferDescriptor;
-            char                                  Data[64];
+            enum USBHIDClass                      HIDClass;
+            union {
+                u64                     Data[1];
+                union HIDMouseReport    MouseReport;
+                union HIDKeyboardReport KeyboardReport;
+            };
         } HID;
     };
 };
@@ -486,7 +525,7 @@ bool OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 
 bool OHCIInitializeDevice(u32 Port);
 
 void InitializeUSBController(struct PCIConfig *Config) {
-    Print("Detected ");
+    Printf("PCI[ %d:%d:%d ] : Detected ", Config->Bus, Config->Device, Config->Function);
     switch (Config->Interface) {
     case USB_INTERFACE_UCHI:
         Print("UCHI");
@@ -834,15 +873,18 @@ bool OHCIDetectHIDDevice(struct OHCIDevice *Device) {
     char *DeviceType = NULL;
     switch (Device->Interface->InterfaceProtocol) {
     case 1:
-        DeviceType = "Keyboard";
+        DeviceType           = "Keyboard";
+        Device->HID.HIDClass = KEYBOARD;
         break;
     case 2:
-        DeviceType = "Mouse";
+        DeviceType           = "Mouse";
+        Device->HID.HIDClass = MOUSE;
         break;
     default:
         DebugLinef("HID device has unsupported protocol number: %d", Device->Interface->InterfaceProtocol);
         return false;
     };
+    Device->InterfaceClass = USB_INTERFACE_HID;
 
     struct OHCIHIDDescriptor         *HIDDescriptor = (struct OHCIHIDDescriptor *) ((u8 *) Device->Interface + Device->Interface->Length);
     struct OHCIUSBEndpointDescriptor *USBED         = (struct OHCIUSBEndpointDescriptor *) ((u8 *) HIDDescriptor + HIDDescriptor->Length);
@@ -882,7 +924,7 @@ bool OHCIDetectHIDDevice(struct OHCIDevice *Device) {
     Device->HID.TransferDescriptor->Control.DelayInterrupt = 0b0;
     Device->HID.TransferDescriptor->Control.DataToggle     = 0b11;
     Device->HID.TransferDescriptor->CurrentBufferPointer   = (u32) (usize) (Device->HID.Data);
-    Device->HID.TransferDescriptor->BufferEnd              = (u32) (usize) ((char *) Device->HID.Data + USBED->MaxPacketSize - 1);
+    Device->HID.TransferDescriptor->BufferEnd              = (u32) (usize) ((u8 *) Device->HID.Data + USBED->MaxPacketSize - 1);
     Device->HID.TransferDescriptor->NextTD                 = (u32) (usize) Device->HID.DummyTransferDescriptor;
 
     usize Index = 0;
@@ -931,6 +973,8 @@ bool OHCIDetectMassStorageDevice(struct OHCIDevice *Device) {
         Transport = "Unknown";
         break;
     };
+
+    Device->InterfaceClass = USB_INTERFACE_MASS_STORAGE;
     PrintLinef("USB Device[%d]: %s(%s): Detected as Mass-Storage device. Command Set = %s, Transport = %s",
                Device->FunctionAddress,
                Device->ProductString,
@@ -981,6 +1025,8 @@ bool OHCIDetectHubDevice(struct OHCIDevice *Device) {
             DebugLinef("Failed to init port");
         }
     }
+
+    Device->InterfaceClass = USB_INTERFACE_HUB;
     return true;
 }
 
@@ -1078,6 +1124,74 @@ bool OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 
     return Timeout != 0;
 }
 
+// #define OHCI_DEBUG_HID_INPUT
+
+void HIDKeyboardReport(union HIDKeyboardReport *Report) {
+#ifdef OHCI_DEBUG_HID_INPUT
+    DebugLinef("HID Keyboard Report:");
+    DebugLinef("  Modifiers:"
+               " LCtrl=%u LShift=%u LAlt=%u LGUI=%u"
+               " RCtrl=%u RShift=%u RAlt=%u RGUI=%u",
+               Report->LeftCtrl,
+               Report->LeftShift,
+               Report->LeftAlt,
+               Report->LeftGUI,
+               Report->RightCtrl,
+               Report->RightShift,
+               Report->RightAlt,
+               Report->RightGUI);
+
+    DebugLinef("  Reserved: 0x%02X", Report->Reserved);
+
+    DebugLinef("  KeyCodes:");
+    for (int i = 0; i < 6; i++) {
+        DebugLinef("    [%d] = 0x%02X", i, Report->KeyCode[i]);
+    }
+
+    DebugLinef("  Raw Value: 0x%016llX", (unsigned long long) Report->Value);
+#endif
+
+    struct InputKeyboardEvent Event = {0};
+    Event.LeftCtrl                  = Report->LeftCtrl;
+    Event.LeftShift                 = Report->LeftShift;
+    Event.LeftAlt                   = Report->LeftAlt;
+    Event.RightCtrl                 = Report->RightCtrl;
+    Event.RightShift                = Report->RightShift;
+    Event.RightAlt                  = Report->RightAlt;
+    Event.RightGUI                  = Report->RightGUI;
+    memcpy(Event.KeyCode, (const void *)Report->KeyCode, sizeof(Event.KeyCode));
+    InputPushKeyboardEvent(&Event);
+}
+
+void HIDMouseReport(union HIDMouseReport *Report) {
+#ifdef OHCI_DEBUG_HID_INPUT
+    DebugLinef("HID Mouse Report:");
+    DebugLinef("  Buttons: L=%u R=%u M=%u B3=%u B4=%u", Report->Left, Report->Right, Report->Middle, Report->Button3, Report->Button4);
+
+    DebugLinef("  Movement: X=%d  Y=%d  Wheel=%d", Report->X, Report->Y, Report->Wheel);
+
+    DebugLinef("  Raw Value: 0x%08X", Report->Value);
+#endif
+}
+
+void OHCIHIDDeviceReportRecieved(struct OHCIDevice *Device) {
+    if (Device->InterfaceClass != USB_INTERFACE_HID)
+        return;
+    if (!Device->Active)
+        return;
+
+    switch (Device->HID.HIDClass) {
+    case KEYBOARD: {
+        HIDKeyboardReport(&Device->HID.KeyboardReport);
+        break;
+    }
+    case MOUSE: {
+        HIDMouseReport(&Device->HID.MouseReport);
+        break;
+    }
+    }
+}
+
 void OHCIInterruptHandler(struct CPUInterruptFrame *Frame) {
     DisableInterrupts();
     union OHCIInterruptRegister Status = gOHCIRegisters->InterruptStatus;
@@ -1108,7 +1222,7 @@ void OHCIInterruptHandler(struct CPUInterruptFrame *Frame) {
 
                     if ((usize) CompletedTD == (usize) Dev->HID.TransferDescriptor) {
                         if (CompletedTD->Control.ConditionCode == 0) {
-                            Print("D");
+                            OHCIHIDDeviceReportRecieved(Dev);
                         } else {
                             DebugLinef("HID Error CC: %x", CompletedTD->Control.ConditionCode);
                         }

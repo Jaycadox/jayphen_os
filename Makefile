@@ -3,7 +3,7 @@ SYSTEM_CC := clang
 LD := lld
 ASM := nasm
 
-CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave -O0
+CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave -mno-sse -mno-sse2 -mno-sse3 -mno-ssse3 -mno-sse4.1 -mno-sse4.2 -mno-avx -mno-avx2 -mno-fma -mno-fma4 -mno-aes -O3
 CFLAGS := $(CFLAGS_GENERIC) -target x86_64-unknown-windows -Iedk2/MdePkg/Include -Iedk2/MdePkg/Include/X64 -I/usr/include
 LDFLAGS := -flavor link -subsystem:efi_application -entry:EFIMain
 ASMFLAGS := -f win64

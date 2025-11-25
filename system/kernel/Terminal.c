@@ -53,6 +53,26 @@ void TerminalPutChar(char Char) {
     u64 CharacterYIndex         = gTerminal.Position / MaximumCharactersPerRow;
     u64 CharacterXIndex         = gTerminal.Position % MaximumCharactersPerRow;
 
+    if (Char == '\b') {
+        --gTerminal.Position;
+        u64 CharacterYIndex         = gTerminal.Position / MaximumCharactersPerRow;
+        u64 CharacterXIndex         = gTerminal.Position % MaximumCharactersPerRow;
+        u64 CharacterYPos = CharacterYIndex * TERMINAL_FONT_PX_Y;
+        u64 CharacterXPos = CharacterXIndex * TERMINAL_FONT_PX_X;
+        for (u64 YOffset = 0; YOffset < TERMINAL_FONT_PX_Y; ++YOffset) {
+            for (u64 XOffset = 0; XOffset < TERMINAL_FONT_PX_X; ++XOffset) {
+                u64 Y = CharacterYPos + YOffset;
+                u64 X = CharacterXPos + XOffset;
+
+                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Red      = 0x0;
+                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Green    = 0x0;
+                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Blue     = 0x0;
+                gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Reserved = 0xFF;
+            }
+        }
+        return;
+    }
+
     u64 NextPosition = gTerminal.Position + 1;
     if (Char == '\n') {
         NextPosition = (CharacterYIndex + 1) * MaximumCharactersPerRow;
@@ -139,7 +159,7 @@ void Printf(const char *Format, ...) {
     stbsp_vsnprintf(gScratch, sizeof(gScratch), Format, args);
     va_end(args);
     Print(gScratch);
-    DisableInterrupts();
+    EnableInterrupts();
 }
 
 void PrintLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));

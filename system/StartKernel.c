@@ -1,9 +1,10 @@
-#define KERNEL_DEBUG
+// #define KERNEL_DEBUG
 #define KERNEL_STACK_PAGES 256
 #include "elf_libc.c"
 
 #include "kernel/Allocator.c"
 #include "kernel/GlobalDescriptorTable.c"
+#include "kernel/Input.c"
 #include "kernel/PCI.c"
 #include "kernel/ProgrammableIntervalTimer.c"
 
@@ -33,8 +34,10 @@ int main(void) {
     EnableProgrammableIntervalTimer(1000);
     ScanPCIBus();
 
+    struct InputCharacterEventSubscriber CharSub = {0};
     for (;;) {
-        // PrintLinef("test");
+        char ASCIIChar = InputNextASCIICharacterEvent(&CharSub, gInputKeyPressedQueue);
+        Printf("%c", ASCIIChar);
     }
 
     return 0;
