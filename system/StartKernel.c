@@ -13,14 +13,10 @@ int main(void) {
     struct FrameBufferInfo *FrameBuffer = GetFrameBufferInfo();
     ExitUEFIMode();
     gFrameBuffer = FrameBuffer;
-
-    for (int x = 0; x < FrameBuffer->Width; ++x) {
-        for (int y = 0; y < FrameBuffer->Height; ++y) {
-            FrameBuffer->Base[y * FrameBuffer->Width + x].Blue  = 0x00;
-            FrameBuffer->Base[y * FrameBuffer->Width + x].Green = 0x00;
-            FrameBuffer->Base[y * FrameBuffer->Width + x].Red   = 0xFF * ((float) x / (float) FrameBuffer->Width);
-        }
+    for (u32 i = 0; i < FrameBuffer->LineNumber + 3; ++i) {
+        PrintLine("");
     }
+
     DebugLinef("Boot info:");
     DebugLinef("Num. memory mapped IO regions: %zu", Layout->NumMemoryMappedIORegions);
     DebugLinef("Num. port mapped IO regions  : %zu", Layout->NumPortMappedIORegions);
@@ -34,11 +30,29 @@ int main(void) {
     EnableProgrammableIntervalTimer(1000);
     ScanPCIBus();
 
-    struct InputCharacterEventSubscriber CharSub = {0};
-    for (;;) {
-        char ASCIIChar = InputNextASCIICharacterEvent(&CharSub, gInputKeyPressedQueue);
-        Printf("%c", ASCIIChar);
-    }
+    PrintLine("\njayphenOS alpha\n");
 
+    char Line[256] = {0};
+    for (;;) {
+        Print(" $ ");
+        usize Size = InputReadLine(Line, sizeof(Line));
+        if (Size != 0) {
+            if (StrEq(Line, "reset")) {
+                TriggerTripleFault();
+            } else if (StrEq(Line, "panic")) {
+                Panic("User triggered panic");
+            } else if (StrEq(Line, "clear")) {
+                TerminalClear();
+            } else if (StrEq(Line, "help") || StrEq(Line, "?")) {
+                PrintLine("help/?: shows this dialoge");
+                PrintLine("reset : resets the system");
+                PrintLine("panic : panics the system");
+                PrintLine("clear : clears the screen");
+                PrintLine("...   : echoes prompt");
+            } else {
+                PrintLinef(">> %s", Line);
+            }
+        }
+    }
     return 0;
 }

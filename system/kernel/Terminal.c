@@ -23,7 +23,7 @@ struct Terminal {
     bool                  TextColourInit;
 };
 
-#define TERMINAL_DEFAULT_COLOUR ((struct TerminalColour) {.Red = 0xFF, .Green = 0xFF, .Blue = 0xFF})
+#define TERMINAL_DEFAULT_COLOUR ((struct TerminalColour) {.Red = 0xAA, .Green = 0xAA, .Blue = 0xAA})
 
 #define TERMINAL_DEBUG_COLOUR ((struct TerminalColour) {.Red = 0xFF, .Green = 0xFF, .Blue = 0x00})
 
@@ -55,10 +55,10 @@ void TerminalPutChar(char Char) {
 
     if (Char == '\b') {
         --gTerminal.Position;
-        u64 CharacterYIndex         = gTerminal.Position / MaximumCharactersPerRow;
-        u64 CharacterXIndex         = gTerminal.Position % MaximumCharactersPerRow;
-        u64 CharacterYPos = CharacterYIndex * TERMINAL_FONT_PX_Y;
-        u64 CharacterXPos = CharacterXIndex * TERMINAL_FONT_PX_X;
+        u64 CharacterYIndex = gTerminal.Position / MaximumCharactersPerRow;
+        u64 CharacterXIndex = gTerminal.Position % MaximumCharactersPerRow;
+        u64 CharacterYPos   = CharacterYIndex * TERMINAL_FONT_PX_Y;
+        u64 CharacterXPos   = CharacterXIndex * TERMINAL_FONT_PX_X;
         for (u64 YOffset = 0; YOffset < TERMINAL_FONT_PX_Y; ++YOffset) {
             for (u64 XOffset = 0; XOffset < TERMINAL_FONT_PX_X; ++XOffset) {
                 u64 Y = CharacterYPos + YOffset;
@@ -201,3 +201,18 @@ void DebugLinef(const char *Format, ...) {
 void DebugLinef(const char *Format, ...) __attribute__((format(printf, 1, 2)));
 void DebugLinef(const char *Format, ...) {}
 #endif
+
+void TerminalClear() {
+    DisableInterrupts();
+
+    for (u32 X = 0; X < gFrameBuffer->Width; ++X) {
+        for (u32 Y = 0; Y < gFrameBuffer->Height; ++Y) {
+           gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Red = 0x00;
+           gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Green = 0x00;
+           gFrameBuffer->Base[Y * gFrameBuffer->Width + X].Blue = 0x00;
+        }
+    }
+    gTerminal.Position = 0;
+
+    EnableInterrupts();
+}

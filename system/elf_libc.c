@@ -131,8 +131,8 @@ struct FrameBufferPixel {
 struct FrameBufferInfo {
     struct FrameBufferPixel *Base;
     usize                    Size;
-
     u32 Width, Height;
+    u32 LineNumber;
     // u32 PixelsPerScanline;
 };
 
@@ -228,6 +228,17 @@ u64 RandomInt64(void) {
 
     __asm__ volatile("rdtsc" : "=A"(value));
     return value;
+}
+
+bool StrEq(char *String1, char *String2) {
+    while (*String1 && *String2) {
+        if (*String1 != *String2) {
+            return false;
+        }
+        String1++;
+        String2++;
+    }
+    return *String1 == *String2;
 }
 
 void Panic(const char *Format, ...) __attribute__((format(printf, 1, 2)));

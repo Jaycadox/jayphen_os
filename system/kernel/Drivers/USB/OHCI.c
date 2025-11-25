@@ -525,7 +525,7 @@ bool OHCISendControlRequest(u8 FunctionAddress, u8 RequestType, u8 Request, u16 
 bool OHCIInitializeDevice(u32 Port);
 
 void InitializeUSBController(struct PCIConfig *Config) {
-    Printf("PCI[ %d:%d:%d ] : Detected ", Config->Bus, Config->Device, Config->Function);
+    Printf("PCI[%d:%d:%d]   : Detected ", Config->Bus, Config->Device, Config->Function);
     switch (Config->Interface) {
     case USB_INTERFACE_UCHI:
         Print("UCHI");

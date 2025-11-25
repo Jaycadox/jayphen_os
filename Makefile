@@ -3,7 +3,7 @@ SYSTEM_CC := clang
 LD := lld
 ASM := nasm
 
-CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave -mno-sse -mno-sse2 -mno-sse3 -mno-ssse3 -mno-sse4.1 -mno-sse4.2 -mno-avx -mno-avx2 -mno-fma -mno-fma4 -mno-aes -O3
+CFLAGS_GENERIC := -nostdlib -static -fno-builtin -ffreestanding -fno-stack-protector -std=c11 -Wall -Wno-excessive-regsave -mno-sse -mno-sse2 -mno-sse3 -mno-ssse3 -mno-sse4.1 -mno-sse4.2 -mno-avx -mno-avx2 -mno-fma -mno-fma4 -mno-aes -O0
 CFLAGS := $(CFLAGS_GENERIC) -target x86_64-unknown-windows -Iedk2/MdePkg/Include -Iedk2/MdePkg/Include/X64 -I/usr/include
 LDFLAGS := -flavor link -subsystem:efi_application -entry:EFIMain
 ASMFLAGS := -f win64
@@ -31,7 +31,7 @@ bootx64.efi: uefiboot.o sysv_elf_compat.o $(BINARIES)
 
 qemu: bootx64.efi
 	cp /usr/share/edk2/x64/OVMF.4m.fd .
-	qemu-system-x86_64 --enable-kvm -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -usb -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0 -device usb-mouse,bus=ohci.0 -device usb-storage,bus=ohci.0,drive=fatdisk -drive if=none,id=fatdisk,format=raw,file=fat:rw:kernel_rootdir -m 1G
+	qemu-system-x86_64 --machine accel=kvm -drive if=pflash,format=raw,file=./OVMF.4m.fd -drive format=raw,file=fat:rw:root -net none -usb -device pci-ohci,id=ohci -device usb-kbd,bus=ohci.0 -device usb-mouse,bus=ohci.0 -device usb-storage,bus=ohci.0,drive=fatdisk -drive if=none,id=fatdisk,format=raw,file=fat:rw:kernel_rootdir -m 1G
 
 
 

@@ -44,9 +44,12 @@ struct MemoryLayout          *UpdateMemoryMap(bool OutputStatistics);
 
 #include "uefiboot_protocols.c"
 
+static int LineNumber = 0;
+
 void PrintLine(CHAR16 *msg) {
     ST->ConOut->OutputString(ST->ConOut, msg);
     ST->ConOut->OutputString(ST->ConOut, L"\r\n");
+    ++LineNumber;
 }
 
 void Print(CHAR16 *msg) {
@@ -164,6 +167,7 @@ struct FrameBufferInfo {
     UINTN   Size;
 
     UINT32 Width, Height;
+    UINT32 LineNumber;
     // UINT32 PixelsPerScanline;
 };
 
@@ -182,6 +186,7 @@ struct FrameBufferInfo *GetFramebufferInfo(void) {
     if (Info.Width != GOP->Mode->Info->PixelsPerScanLine) {
         Panic(L"Framebuffer width and scanline length mismatch");
     }
+    Info.LineNumber = LineNumber;
 
     return &Info;
 }

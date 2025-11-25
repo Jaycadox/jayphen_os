@@ -255,7 +255,7 @@ bool InputScancodeIsASCII(enum InputKeyboardScancodes code) {
 }
 
 char InputScancodeToASCII(enum InputKeyboardScancodes Code) {
-    bool Shift = gInputKeysDown[SCANCODE_KEY_SHIFT];
+    bool Shift  = gInputKeysDown[SCANCODE_KEY_SHIFT];
     char Output = '\0';
     switch (Code) {
     case SCANCODE_KEY_A:
@@ -483,6 +483,37 @@ char InputNextASCIICharacterEvent(struct InputCharacterEventSubscriber *Subscrib
         InputNextCharacterEvent(Subscriber, EventQueue);
         if (Subscriber->LastEvent.ASCII) {
             return Subscriber->LastEvent.ASCII;
+        }
+    }
+}
+
+usize InputReadLine(char *OutBuffer, usize Size) {
+    static struct InputCharacterEventSubscriber CharSub = {0};
+    MemSet(OutBuffer, 0, Size);
+
+    i64 Index = 0;
+    for (;;) {
+        char ASCIIChar = InputNextASCIICharacterEvent(&CharSub, gInputKeyPressedQueue);
+        if (ASCIIChar == '\n') {
+            Print("\n");
+            return Index;
+        } else if (ASCIIChar == '\b') {
+            if (Index > 0) {
+                OutBuffer[Index--] = '\0';
+                Print("\b");
+            }
+        } else if(CharSub.LastEvent.ScanCode == SCANCODE_KEY_C && CharSub.LastEvent.Control) {
+            MemSet(OutBuffer, 0, Size);
+            for (i32 i = 0; i < Index; ++i) {
+                Print("\b");
+            }
+            Index = 0;
+        } else if (Index < Size) {
+            OutBuffer[Index++] = ASCIIChar;
+            Printf("%c", ASCIIChar);
+        } else {
+            Print("\t[err: prompt too long]\n");
+            return 0;
         }
     }
 }
