@@ -490,27 +490,31 @@ char InputNextASCIICharacterEvent(struct InputCharacterEventSubscriber *Subscrib
 usize InputReadLine(char *OutBuffer, usize Size) {
     static struct InputCharacterEventSubscriber CharSub = {0};
     MemSet(OutBuffer, 0, Size);
-
+    Print("_");
     i64 Index = 0;
+    usize StartPosition = gTerminal.Position;
     for (;;) {
         char ASCIIChar = InputNextASCIICharacterEvent(&CharSub, gInputKeyPressedQueue);
         if (ASCIIChar == '\n') {
+            Print("\b");
             Print("\n");
             return Index;
         } else if (ASCIIChar == '\b') {
             if (Index > 0) {
                 OutBuffer[Index--] = '\0';
-                Print("\b");
+                Print("\b\b_");
             }
         } else if(CharSub.LastEvent.ScanCode == SCANCODE_KEY_C && CharSub.LastEvent.Control) {
             MemSet(OutBuffer, 0, Size);
-            for (i32 i = 0; i < Index; ++i) {
+            while (gTerminal.Position != StartPosition) {
                 Print("\b");
             }
+            Print("\b_");
             Index = 0;
         } else if (Index < Size) {
+            Print("\b");
             OutBuffer[Index++] = ASCIIChar;
-            Printf("%c", ASCIIChar);
+            Printf("%c_", ASCIIChar);
         } else {
             Print("\t[err: prompt too long]\n");
             return 0;

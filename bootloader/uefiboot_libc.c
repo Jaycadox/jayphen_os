@@ -396,7 +396,7 @@ EFI_GRAPHICS_OUTPUT_BLT_PIXEL hue_to_rgb(float hue) {
 void RainbowStripe(int height) {
     const int num_stripes  = 150;
     float     hue_change   = 360.0f / num_stripes;
-    UINT32    stripe_width = GOP->Mode->Info->HorizontalResolution / num_stripes;
+    UINT32    stripe_width = GOP->Mode->Info->HorizontalResolution / num_stripes + 1;
 
     float  hue = 0.0f;
     UINT32 x   = 0;
